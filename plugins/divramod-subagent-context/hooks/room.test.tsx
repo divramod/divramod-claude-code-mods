@@ -21,7 +21,7 @@ test('rows that do not fit are counted, not dropped silently', async ($, on) => 
 test('a subagent that starts asks the open pane for room, a closed pane stays closed', async ($, on) => {
   const asked: (number | undefined)[] = []
   let up = true
-  on('ui.panes', () => ({ value: up ? [{ id: 'subagent-context', title: 'Subagents: context', isShown: true, hasFocus: false, isPlaced: true }] : [] }))
+  on('ui.panes', () => ({ value: up ? [{ id: 'subagent-context', title: 'Subagents: context', isShown: true, isFocused: false, isPlaced: true }] : [] }))
   on('ui.open', (_$, e) => {
     asked.push(e.rows)
     return { value: undefined as never }
