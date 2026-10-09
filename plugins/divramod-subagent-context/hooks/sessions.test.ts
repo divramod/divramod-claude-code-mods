@@ -36,3 +36,11 @@ test('the grid is drawn with rules, or says it is empty', () => {
   expect(out.at(-1)).toMatch(/^└/)
   expect(lines(plansGrid([], 0), 'none').some(l => l.includes('none'))).toBe(true)
 })
+
+test('a grid wider than the pane is fitted to it: no line is longer, the widest cell is cut with an ellipsis', () => {
+  const rows = [row({ plan: '0198-faster-ci-the-report-s-seven-improvements-and-more', name: 'media-management-system-30', cwd: '/a/b/media-management-system' })]
+  const out = lines(plansGrid(rows, 0), 'none', 90)
+  expect(Math.max(...out.map(l => l.length))).toBeLessThanOrEqual(90)
+  expect(out.some(l => l.includes('…'))).toBe(true)
+  expect(new Set(out.map(l => l.length)).size).toBe(1)
+})

@@ -54,12 +54,25 @@ export const plansGrid = (rows: readonly SessionRow[], now: number): Grid => ({
   cells: ordered(rows, true).map(r => [r.plan, `${r.here ? '● ' : ''}${r.name}`, folder(r.cwd), r.status || r.kind, ago(r.startedAt, now)]),
 })
 
-const CAP = 44
+const MIN = 8
 
-// The grid as box-drawn lines like the subagents' table: each column as wide as its longest cell (at most CAP), a rule
-// between the rows; `empty` says so when there is no row.
-export const lines = (g: Grid, empty: string) => {
-  const laid = g.heads.map((h, i) => Math.min(CAP, Math.max(h.length, ...g.cells.map(c => c[i]!.length))) + 2)
+// The column widths for a pane `columns` wide: each as wide as its longest cell, then the widest shrunk one cell at a
+// time until the table fits (a cut cell ends in `…`); never below MIN.
+export const widths = (g: Grid, columns: number) => {
+  const laid = g.heads.map((h, i) => Math.max(h.length, ...g.cells.map(c => c[i]!.length)) + 2)
+  const total = () => laid.reduce((sum, w) => sum + w + 1, 1)
+  while (columns > 0 && total() > columns) {
+    const widest = laid.indexOf(Math.max(...laid))
+    if (laid[widest]! <= MIN) break
+    laid[widest]!--
+  }
+  return laid
+}
+
+// The grid as box-drawn lines like the subagents' table, fitted to `columns`, a rule between the rows; `empty` says so
+// when there is no row.
+export const lines = (g: Grid, empty: string, columns = 0) => {
+  const laid = widths(g, columns)
   const out = [rule(laid, 'top'), line(g.heads, laid, g.aligns), rule(laid, 'mid')]
   g.cells.forEach((c, i) => out.push(...(i ? [rule(laid, 'mid')] : []), line(c, laid, g.aligns)))
   if (!g.cells.length) out.push(line([empty], [laid.reduce((sum, w) => sum + w + 1, -1)], ['l']))

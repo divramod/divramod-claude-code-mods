@@ -280,7 +280,7 @@ export const register: Register = (on, options) => {
         ) : (
           <>
             <Box flexDirection="column" flexGrow={1}>
-              {gridLines(current === 'plans' ? plansGrid(found, now) : agentsGrid(found, now), current === 'plans' ? 'No session has a current plan.' : 'No Claude sessions found.').map((t, i) => <Text key={String(i)} dimColor={/^[┌├└]/.test(t)}>{t}</Text>)}
+              {gridLines(current === 'plans' ? plansGrid(found, now) : agentsGrid(found, now), current === 'plans' ? 'No session has a current plan.' : 'No Claude sessions found.', e.props.bodyColumns ?? e.viewport?.columns ?? 0).map((t, i) => <Text key={String(i)} dimColor={/^[┌├└]/.test(t)}>{t}</Text>)}
             </Box>
             <Text dimColor>{`${ordered(found, current === 'plans').length} sessions · reloaded every 10 s · ● this session`}</Text>
             <Button label="close" hotkey="q" plain onPress={() => $.ui.close({ id: PANE })} />
