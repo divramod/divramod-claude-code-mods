@@ -1,0 +1,16 @@
+{
+  "name": "divramod-claude-code-mods",
+  "owner": {
+    "name": "Arvid Petermann",
+    "url": "https://github.com/divramod"
+  },
+  "description": "divramod's Claude Code mods: live panes and tweaks for Claude Code's interface.",
+  "plugins": [
+    {
+      "name": "divramod-subagent-context",
+      "source": "./plugins/divramod-subagent-context",
+      "description": "A live pane of every subagent of the session: model, effort, context fill, peak and compactions.",
+      "category": "productivity"
+    }
+  ]
+}
