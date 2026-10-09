@@ -33,14 +33,20 @@ async function seen($: EngineInterface, known: Known, l: Limits, e: TurnStepInpu
   if (tone(row, l) && (!was || tone(was, l) !== tone(row, l))) $.ui.status(`subagent at ${Math.round(share(row, l) * 100)}% context`)
 }
 
-// The body rows the pane asks for: the tabs, the header, one per subagent and the footer, between 8 and 20. A pane
+// The body rows the pane asks for: the tabs, the header, one per subagent and the footer, between 9 and 20. A pane
 // opened without `rows` is a third of the screen and showed one row of five (the user, 2026-10-09).
-export const wanted = (subagents: number) => Math.min(20, Math.max(8, subagents + 3))
+export const wanted = (subagents: number) => Math.min(20, Math.max(9, subagents + 4))
 
 // Asks an open pane for the room its rows need; a pane the person closed stays closed.
 async function room($: EngineInterface, n: number) {
   const up = (await $.ui.panes()).some(p => p.id === PANE)
   if (up) await $.ui.open({ id: PANE, title: 'Subagents: context', rows: wanted(n) })
+}
+
+// The version in the plugin's own plugin.json, shown at the pane's top right; empty when it cannot be read.
+async function versionOf($: EngineInterface) {
+  const text = await $.fs.read(`${$.plugin.root}/.claude-plugin/plugin.json`).catch(() => '')
+  return String((() => { try { return JSON.parse(String(text)).version ?? '' } catch { return '' } })())
 }
 
 const list = ($: EngineInterface, dir: string) => $.fs.list(dir).catch(() => [])
@@ -133,9 +139,13 @@ export const register: Register = (on, options) => {
       rows: list.map(row => ({ id: row.id, cells: cells(row, l), values: values(row, l), color: color(row, l) ?? null, running: running(row) })),
       view: await read($, view),
     }
-    const room = Math.max(1, (e.viewport?.rows ?? 24) - 4)
+    const version = await versionOf($)
+    const room = Math.max(1, (e.viewport?.rows ?? 24) - 5)
     return (
       <Box flexDirection="column">
+        <Box justifyContent="flex-end">
+          <Text dimColor>{version ? `v${version}` : ''}</Text>
+        </Box>
         {Client ? (
           <Client key="table" module="./table-view.tsx" props={table} flexGrow={1} />
         ) : (

@@ -3,8 +3,8 @@ import { expect, test } from 'claude-code/testing'
 import { wanted } from './register'
 import { mounted } from './testkit'
 
-test('the pane asks for a row per subagent, between 8 and 20', () => {
-  expect([0, 5, 9, 30].map(wanted)).toEqual([8, 8, 12, 20])
+test('the pane asks for a row per subagent, between 9 and 20', () => {
+  expect([0, 5, 9, 30].map(wanted)).toEqual([9, 9, 13, 20])
 })
 
 test('rows that do not fit are counted, not dropped silently', async ($, on) => {
@@ -28,8 +28,17 @@ test('a subagent that starts asks the open pane for room, a closed pane stays cl
   })
   await mounted($, on)
   await $.classic.SubagentStart({ agent_id: 'delta', agent_type: 'general-purpose' } as never)
-  expect(asked).toEqual([8])
+  expect(asked).toEqual([9])
   up = false
   await $.classic.SubagentStart({ agent_id: 'eps', agent_type: 'general-purpose' } as never)
-  expect(asked).toEqual([8])
+  expect(asked).toEqual([9])
+})
+
+test("the pane's top right shows the version of plugin.json", async ($, on) => {
+  on('fs.read', (_$, e) => {
+    if (!e.path.endsWith('/.claude-plugin/plugin.json')) throw new Error(`ENOENT ${e.path}`)
+    return { value: JSON.stringify({ version: '9.8.7' }) }
+  })
+  const { ui } = await mounted($, on)
+  expect(await ui.find({ type: 'Text', text: 'v9.8.7' })).toBeDefined()
 })
