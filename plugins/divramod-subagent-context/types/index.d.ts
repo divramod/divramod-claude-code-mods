@@ -8,7 +8,11 @@ export type SubagentRow = {
   peak: number
   compactions: number
   minutes: number
+  // When its first and its latest step were seen (`$.clock.now()` ms); rows keep the order of `started`.
+  started: number
   mtime: number
+  // Its AgentStatus as `$.agent.list()` last gave it.
+  status: string
 }
 
 declare module 'claude-code' {
