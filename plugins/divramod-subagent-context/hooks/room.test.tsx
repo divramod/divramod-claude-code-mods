@@ -1,7 +1,6 @@
 import { expect, mock, test } from 'claude-code/testing'
 
-import { limits } from './table'
-import { summary, wanted } from './register'
+import { wanted } from './register'
 import { mounted } from './testkit'
 
 test('the pane asks for a row per subagent, between 9 and 20', () => {
@@ -42,14 +41,6 @@ test("the pane's top right shows the version of plugin.json", async ($, on) => {
   })
   const { ui } = await mounted($, on)
   expect(await ui.find({ type: 'Text', text: 'v9.8.7' })).toBeDefined()
-})
-
-test('the summary line counts running and finished and keeps the highest peak', () => {
-  const l = limits({ window: '1m' }, 1_000_000)
-  const row = (id: string, peak: number, status: string) => ({ id, description: id, model: '', effort: '', calls: 1, now: peak, peak, compactions: 0, minutes: 1, started: 0, mtime: 0, status })
-  expect(summary([], l)).toBeUndefined()
-  expect(summary([row('a', 100_000, 'running'), row('b', 250_000, 'completed')], l)).toBe('subagents: 1 running · 1 finished · peak 25%')
-  expect(summary([row('a', 400_000, 'failed')], l)).toBe('subagents: 0 running · 1 finished · peak 40% ⚠')
 })
 
 test('a button above the prompt opens the pane, and closes it when it is open', async ($, on) => {

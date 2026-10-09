@@ -57,8 +57,7 @@ const usage = (tokens: number) => ({ input_tokens: 0, output_tokens: 100, cache_
 test('a stubbed step stream fills the rows and colors them by their share', async ($, on) => {
   mock.clock(on)
   on('agent.list', () => ({ value: [...AGENTS] }))
-  const status: (string | undefined)[] = []
-  on('ui.status', (_$, e) => (status.push(e.text), { value: undefined }))
+  on('ui.status', () => ({ value: undefined }))
   on('turn.step', async function* (_$, e) {
     const u = usage(e.messageCount)
     yield { kind: 'stop', stopReason: 'end_turn', usage: u }
@@ -78,11 +77,6 @@ test('a stubbed step stream fills the rows and colors them by their share', asyn
   expect(step30?.props.color).toBe('yellow')
   expect((await ui.find({ type: 'Text', text: /Explore the hooks/, in: 'table' }))?.props.color).toBe('red')
   expect(await ui.find({ type: 'Text', text: /500k|700k/, in: 'table' })).toBeUndefined()
-  expect(status).toEqual([
-    'subagents: 1 running · 0 finished · peak 4%',
-    'subagents: 2 running · 0 finished · peak 36% ⚠',
-    'subagents: 2 running · 0 finished · peak 36% ⚠',
-  ])
   await ui.unmount()
 })
 
