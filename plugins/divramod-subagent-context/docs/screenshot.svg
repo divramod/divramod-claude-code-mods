@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="834" height="202" viewBox="0 0 834 202" font-family="Menlo, Consolas, 'DejaVu Sans Mono', monospace" font-size="15">
+  <title>Subagents: context</title>
+  <rect width="100%" height="100%" rx="8" fill="#1a1b26"/>
+  <text x="12" y="36" fill="#c0caf5" font-weight="bold" xml:space="preserve">  Subagent                             Model   Effort  Calls Now    Peak   %1M   Cmp Min</text>
+  <text x="12" y="58" fill="#c0caf5" xml:space="preserve">✓ Review the landing script            sonnet  medium  31    118k   142k   14.2  0   9</text>
+  <text x="12" y="80" fill="#e0af68" xml:space="preserve">● Research the merge queue             opus    high    54    336k   336k   33.6  0   17</text>
+  <text x="12" y="102" fill="#7dcfff" xml:space="preserve">● Write the migration tests            sonnet  medium  22    288k   288k   28.8  0   11</text>
+  <text x="12" y="124" fill="#c0caf5" xml:space="preserve">✓ Explore the code map                 haiku   low     8     41k    41k    4.1   0   2</text>
+  <text x="12" y="146" fill="#f7768e" xml:space="preserve">✗ Split the oversized file             opus    high    66    120k   410k   41.0  1   24</text>
+  <text x="12" y="168" fill="#565f89" xml:space="preserve">warn 30% · stop 35% of 1M · live</text>
+</svg>
