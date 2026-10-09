@@ -1,0 +1,41 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '17 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - name: Install Claude Code
+        run: |
+          curl -fsSL https://claude.ai/install.sh | bash
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Claude Code version
+        run: claude --version
+      - name: Validate the marketplace
+        run: claude plugin validate --strict .
+      - name: Validate and test every plugin
+        run: |
+          for p in plugins/*/; do
+            echo "::group::$p"
+            claude plugin validate --strict "$p"
+            claude plugin test "$p"
+            echo "::endgroup::"
+          done
+      - name: The screenshots are up to date
+        run: |
+          for s in plugins/*/scripts/screenshot.ts; do
+            [ -e "$s" ] && bun "$s"
+          done
+          git diff --exit-code -- 'plugins/*/docs'
