@@ -3,9 +3,9 @@ import type { AgentInfo, EngineInterface, Register, TurnStepInput, TurnUsage } f
 
 import type { SubagentRow } from '../types'
 import { LIMIT, type File, idOf, metaOf, rowOf } from './backfill'
-import { adopt, fill, record } from './rows'
+import { adopt, fill, mark, record } from './rows'
 import type { TableProps } from './grid'
-import { type Limits, WIDTHS, cells, foot, head, heads, limits, line, share, tone, values } from './table'
+import { type Limits, WIDTHS, cells, color, foot, head, heads, limits, line, running, share, tone, values } from './table'
 
 const PANE = 'subagent-context'
 const rows = atom({ plugin: 'divramod-subagent-context', key: 'rows' } as const, [] as SubagentRow[])
@@ -24,7 +24,7 @@ async function agent($: EngineInterface, known: Known, id: string) {
 async function seen($: EngineInterface, known: Known, l: Limits, e: TurnStepInput, usage: TurnUsage) {
   const a = await agent($, known, e.agentId!)
   if (!a) return
-  const step = { id: a.id, description: a.description, status: a.status, model: usage.model || e.model, effort: e.effort === undefined ? '' : String(e.effort), fill: fill(usage), at: await $.clock.now() }
+  const step = { id: a.id, description: a.description, status: 'running', model: usage.model || e.model, effort: e.effort === undefined ? '' : String(e.effort), fill: fill(usage), at: await $.clock.now() }
   const was = (await read($, rows)).find(r => r.id === a.id)
   const list = await update($, rows, list => record(list, step))
   const row = list.find(r => r.id === a.id)!
@@ -77,6 +77,24 @@ export const register: Register = (on, options) => {
     return result
   })
 
+  // Every subagent of the session has a row from its start; its stop gives it its final status (D15's refresh).
+  on('classic.SubagentStart', async ($, e, next) => {
+    const result = await next(e)
+    const a = await agent($, known, e.agent_id)
+    const at = await $.clock.now()
+    await update($, rows, list => mark(list, { id: e.agent_id, description: a?.description ?? e.agent_type, status: 'running', at }))
+    return result
+  })
+
+  on('classic.SubagentStop', async ($, e, next) => {
+    const result = await next(e)
+    const listed = (await $.agent.list()).find(a => a.id === e.agent_id)?.status
+    const status = listed === 'failed' || listed === 'killed' ? listed : 'completed'
+    const at = await $.clock.now()
+    await update($, rows, list => (list.some(r => r.id === e.agent_id) ? mark(list, { id: e.agent_id, description: e.agent_type, status, at }) : list))
+    return result
+  })
+
   on('command.run', { command: 'divramod-subagent-context' }, async $ => {
     await $.ui.open({ id: PANE, title: 'Subagents: context' })
     return { text: 'Subagents pane opened.' }
@@ -92,7 +110,7 @@ export const register: Register = (on, options) => {
     const table: TableProps = {
       heads: heads(l),
       widths: WIDTHS,
-      rows: list.map(row => ({ id: row.id, cells: cells(row, l), values: values(row, l), color: tone(row, l) ?? null })),
+      rows: list.map(row => ({ id: row.id, cells: cells(row, l), values: values(row, l), color: color(row, l) ?? null, running: running(row) })),
     }
     const room = Math.max(1, (e.viewport?.rows ?? 24) - 4)
     return (
@@ -103,7 +121,7 @@ export const register: Register = (on, options) => {
           <Box flexDirection="column">
             <Text bold>{head(l)}</Text>
             {list.length === 0 && <Text dimColor>No subagents yet.</Text>}
-            {list.slice(-room).map(row => <Text color={tone(row, l)}>{line(row, l)}</Text>)}
+            {list.slice(-room).map(row => <Text color={color(row, l)}>{line(row, l)}</Text>)}
           </Box>
         )}
         <Text dimColor>{`${foot(l)} · live`}</Text>

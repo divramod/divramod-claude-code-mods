@@ -1,14 +1,21 @@
 import type { ClientPointerEvent } from 'claude-code'
 
-// What the hooks module hands the table: the header labels, the start widths and per row its cells, sort values
-// and color (`null`: the surface's default).
-export type TableRow = { id: string; cells: string[]; values: (string | number | null)[]; color: string | null }
+// What the hooks module hands the table: the header labels, the start widths and per row its cells, sort values,
+// color (`null`: the surface's default) and whether it still runs.
+export type TableRow = { id: string; cells: string[]; values: (string | number | null)[]; color: string | null; running: boolean }
 export type TableProps = { heads: string[]; widths: number[]; rows: TableRow[] }
 
 export type Sort = { col: number; dir: 'asc' | 'desc' }
 
-// The table's own state: the sort, the widths, a border being dragged and the label a button went down on.
-export type View = { sort?: Sort; widths: number[]; drag?: { col: number; from: number; width: number }; press?: number }
+export const FILTERS = ['all', 'running', 'finished'] as const
+export type Filter = (typeof FILTERS)[number]
+
+// The table's own state: the sort, the widths, the filter, a border being dragged and what a button went down on.
+export type View = { sort?: Sort; widths: number[]; filter?: Filter; drag?: { col: number; from: number; width: number }; press?: string }
+
+// The Client's rows: the filter's tabs, the header, then the table's rows.
+export const TABS_Y = 0
+export const HEAD_Y = 1
 
 export const MIN = 3
 
@@ -34,6 +41,22 @@ export const order = (rows: readonly TableRow[], sort: Sort | undefined) => {
     .map(r => r.row)
 }
 
+export const shown = (rows: readonly TableRow[], filter: Filter = 'all') =>
+  filter === 'all' ? [...rows] : rows.filter(r => r.running === (filter === 'running'))
+
+// The tabs' labels with their counts, as drawn one cell apart from x 0.
+export const tabs = (rows: readonly TableRow[]) =>
+  FILTERS.map(f => ` ${f[0]!.toUpperCase()}${f.slice(1)} ${shown(rows, f).length} `)
+
+const tabAt = (labels: readonly string[], x: number) => {
+  let start = 0
+  for (const [i, label] of labels.entries()) {
+    if (x >= start && x < start + label.length) return FILTERS[i]
+    start += label.length + 1
+  }
+  return undefined
+}
+
 // The widths laid out in `columns` cells: the last column takes the rest, at least MIN; unmeasured (0) keeps them.
 export const fit = (widths: readonly number[], columns: number) => {
   if (!columns) return [...widths]
@@ -52,22 +75,39 @@ export const hit = (widths: readonly number[], x: number) => {
   return undefined
 }
 
-// The view after one pointer event: a press on a border drags it, a press and release on one label sorts by it.
-export const point = (view: View, e: ClientPointerEvent, laid: readonly number[]): View => {
-  const at = e.y === 0 ? hit(laid, e.x) : undefined
+// What a cell of the top rows is: a tab (`f:<filter>`), a column's label (`h:<col>`) or the border right of it (`b:<col>`).
+const target = (e: ClientPointerEvent, laid: readonly number[], labels: readonly string[]) => {
+  if (e.y === TABS_Y) return tabAt(labels, e.x) && `f:${tabAt(labels, e.x)}`
+  const at = e.y === HEAD_Y ? hit(laid, e.x) : undefined
+  return at && `${at.border ? 'b' : 'h'}:${at.col}`
+}
+
+// The view after one pointer event: a press on a border drags it, a press and release on one label sorts by it,
+// on one tab filters by it.
+export const point = (view: View, e: ClientPointerEvent, laid: readonly number[], labels: readonly string[]): View => {
+  const at = target(e, laid, labels)
   if (e.type === 'down' && e.button === 'left') {
-    if (at?.border) return { ...view, press: undefined, drag: { col: at.col, from: e.x, width: laid[at.col]! } }
-    return { ...view, press: at?.col, drag: undefined }
+    const col = Number(at?.slice(2))
+    if (at?.startsWith('b:')) return { ...view, press: undefined, drag: { col, from: e.x, width: laid[col]! } }
+    return { ...view, press: at, drag: undefined }
   }
   if (e.type === 'move' && view.drag) {
     const { col, from, width } = view.drag
     return { ...view, widths: view.widths.map((w, i) => (i === col ? Math.max(MIN, width + e.x - from) : w)) }
   }
-  if (e.type === 'up' && (view.drag || view.press !== undefined)) {
-    const sort = view.press !== undefined && at && !at.border && at.col === view.press ? cycle(view.sort, at.col) : view.sort
-    return { ...view, sort, drag: undefined, press: undefined }
+  if (e.type === 'up' && (view.drag || view.press)) {
+    const done = { ...view, drag: undefined, press: undefined }
+    if (!view.press || at !== view.press) return done
+    if (at.startsWith('f:')) return { ...done, filter: at.slice(2) as Filter }
+    return { ...done, sort: cycle(view.sort, Number(at.slice(2))) }
   }
   return view
+}
+
+// The keys `a` `r` `f` choose the filter.
+export const key = (view: View, k: string): View => {
+  const filter = FILTERS.find(f => f[0] === k)
+  return filter && filter !== (view.filter ?? 'all') ? { ...view, filter } : view
 }
 
 // The header's labels in their widths, `│` between them, the sorted one marked ▲ or ▼.
@@ -75,7 +115,8 @@ export const header = (heads: readonly string[], laid: readonly number[], sort: 
   heads
     .map((label, i) => {
       const w = laid[i] ?? label.length
-      return sort?.col === i ? pad(label, Math.max(0, w - 2)) + (sort.dir === 'asc' ? ' ▲' : ' ▼') : pad(label, w)
+      const mark = sort?.dir === 'asc' ? '▲' : '▼'
+      return sort?.col !== i ? pad(label, w) : w < 3 ? pad(mark, w) : pad(label, w - 2) + ' ' + mark
     })
     .join('│')
 

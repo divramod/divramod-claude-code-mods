@@ -36,3 +36,9 @@ export const record = (rows: readonly SubagentRow[], s: Step): SubagentRow[] => 
 // Rows read from transcripts join the live ones: a row `turn.step` already made wins (D4); all keep the order of `started`.
 export const adopt = (rows: readonly SubagentRow[], found: readonly SubagentRow[]): SubagentRow[] =>
   [...rows, ...found.filter(f => !rows.some(r => r.id === f.id))].sort((a, b) => a.started - b.started)
+
+// A subagent's status changed (it started, a step ran, it stopped): a new one gets a row without counts yet.
+export const mark = (rows: readonly SubagentRow[], m: { id: string; description: string; status: string; at: number }): SubagentRow[] =>
+  rows.some(r => r.id === m.id)
+    ? rows.map(r => (r.id === m.id ? { ...r, status: m.status, description: r.description || m.description } : r))
+    : [...rows, { id: m.id, description: m.description, model: '', effort: '', calls: 0, now: 0, peak: 0, compactions: 0, minutes: 0, started: m.at, mtime: m.at, status: m.status }]

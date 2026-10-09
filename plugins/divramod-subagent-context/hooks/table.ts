@@ -23,23 +23,32 @@ export const share = (row: SubagentRow, l: Limits) => row.peak / l.window
 export const tone = (row: SubagentRow, l: Limits): 'red' | 'yellow' | undefined =>
   share(row, l) >= l.alert || row.compactions > 0 ? 'red' : share(row, l) >= l.warn ? 'yellow' : undefined
 
-// The table's columns and their start widths; the last one takes the rest of the room.
-export const WIDTHS = [36, 7, 7, 5, 6, 6, 5, 3, 4]
+// An idle agent can still be woken: only completed, failed and killed ones are finished (D16).
+export const running = (row: SubagentRow) => !['completed', 'failed', 'killed'].includes(row.status)
 
-export const heads = (l: Limits) => ['Subagent', 'Model', 'Effort', 'Calls', 'Now', 'Peak', `%${label(l.window)}`, 'Cmp', 'Min']
+const glyph = (row: SubagentRow) => (running(row) ? '●' : row.status === 'completed' ? '✓' : '✗')
+
+// The context tone wins; a running row is cyan otherwise, the state column keeps it recognisable (D14).
+export const color = (row: SubagentRow, l: Limits) => tone(row, l) ?? (running(row) ? 'cyan' : undefined)
+
+// The table's columns and their start widths; the last one takes the rest of the room.
+export const WIDTHS = [1, 36, 7, 7, 5, 6, 6, 5, 3, 4]
+
+export const heads = (l: Limits) => [' ', 'Subagent', 'Model', 'Effort', 'Calls', 'Now', 'Peak', `%${label(l.window)}`, 'Cmp', 'Min']
 
 // A row whose transcript was too large to read shows `-` where it has no counts.
 export const cells = (row: SubagentRow, l: Limits) => {
   const [calls, now, peak, pct, cmp, min] = row.large
     ? ['-', '-', '-', '-', '-', '-']
     : [String(row.calls), k(row.now), k(row.peak), (share(row, l) * 100).toFixed(1), String(row.compactions), String(row.minutes)]
-  return [row.description || row.id, row.model || '-', row.effort || '-', calls, now, peak, pct, cmp, min]
+  return [glyph(row), row.description || row.id, row.model || '-', row.effort || '-', calls, now, peak, pct, cmp, min]
 }
 
-// What a column sorts by: text, or a number; `null` (a large row's counts) sorts last either way.
+// What a column sorts by: text, or a number; `null` (a large row's counts) sorts last either way. The state column
+// sorts running, completed, then failed and killed.
 export const values = (row: SubagentRow, l: Limits): (string | number | null)[] => {
   const n = (v: number) => (row.large ? null : v)
-  return [row.description || row.id, row.model, row.effort, n(row.calls), n(row.now), n(row.peak), n(share(row, l)), n(row.compactions), n(row.minutes)]
+  return [running(row) ? 0 : row.status === 'completed' ? 1 : 2, row.description || row.id, row.model, row.effort, n(row.calls), n(row.now), n(row.peak), n(share(row, l)), n(row.compactions), n(row.minutes)]
 }
 
 const join = (texts: string[]) => texts.map((t, i) => (i === texts.length - 1 ? t : pad(t, WIDTHS[i]!))).join(' ')
