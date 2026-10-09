@@ -33,6 +33,16 @@ async function seen($: EngineInterface, known: Known, l: Limits, e: TurnStepInpu
   if (tone(row, l) && (!was || tone(was, l) !== tone(row, l))) $.ui.status(`subagent at ${Math.round(share(row, l) * 100)}% context`)
 }
 
+// The body rows the pane asks for: the tabs, the header, one per subagent and the footer, between 8 and 20. A pane
+// opened without `rows` is a third of the screen and showed one row of five (the user, 2026-10-09).
+export const wanted = (subagents: number) => Math.min(20, Math.max(8, subagents + 3))
+
+// Asks an open pane for the room its rows need; a pane the person closed stays closed.
+async function room($: EngineInterface, n: number) {
+  const up = (await $.ui.panes()).some(p => p.id === PANE)
+  if (up) await $.ui.open({ id: PANE, title: 'Subagents: context', rows: wanted(n) })
+}
+
 const list = ($: EngineInterface, dir: string) => $.fs.list(dir).catch(() => [])
 
 // The transcripts of this session's subagents: `<config>/projects/*/<session>/subagents/agent-*.jsonl`, with their dirs.
@@ -67,7 +77,7 @@ export const register: Register = (on, options) => {
     const started = await next(e)
     await $.command.register({ name: 'divramod-subagent-context', description: 'Show the context use of this session\'s subagents' })
     l = limits(options, (await $.session.usage()).context.window)
-    void $.ui.open({ id: PANE, title: 'Subagents: context' })
+    void $.ui.open({ id: PANE, title: 'Subagents: context', rows: wanted(0) })
     void earlier($).catch(() => {})
     return started
   })
@@ -84,7 +94,8 @@ export const register: Register = (on, options) => {
     const result = await next(e)
     const a = await agent($, known, e.agent_id)
     const at = await $.clock.now()
-    await update($, rows, list => mark(list, { id: e.agent_id, description: a?.description ?? e.agent_type, status: 'running', at }))
+    const list = await update($, rows, list => mark(list, { id: e.agent_id, description: a?.description ?? e.agent_type, status: 'running', at }))
+    await room($, list.length).catch(() => {})
     return result
   })
 
@@ -98,7 +109,7 @@ export const register: Register = (on, options) => {
   })
 
   on('command.run', { command: 'divramod-subagent-context' }, async $ => {
-    await $.ui.open({ id: PANE, title: 'Subagents: context' })
+    await $.ui.open({ id: PANE, title: 'Subagents: context', rows: wanted((await read($, rows)).length) })
     return { text: 'Subagents pane opened.' }
   })
 

@@ -45,7 +45,10 @@ export default function TableView(props: TableProps, surface: ClientSurface<View
   const rows = order(shown(props.rows, filter), view.sort)
   // As many rows as fit below the tabs and the header: the newest unsorted, the first ones sorted.
   const room = surface.rows > 2 ? surface.rows - 2 : rows.length
-  const visible = view.sort ? rows.slice(0, room) : rows.slice(-room)
+  // Rows that do not fit are counted in the last line, so none is hidden silently.
+  const hidden = rows.length > room && room > 1 ? rows.length - room + 1 : 0
+  const fits = room - (hidden ? 1 : 0)
+  const visible = view.sort ? rows.slice(0, fits) : rows.slice(-fits)
   return (
     <Box flexDirection="column">
       <Box flexDirection="row" gap={1}>
@@ -62,6 +65,7 @@ export default function TableView(props: TableProps, surface: ClientSurface<View
           {row(r.cells, laid)}
         </Text>
       ))}
+      {hidden > 0 && <Text dimColor>{`… ${hidden} more ${view.sort ? 'below' : 'above'}: make the pane taller`}</Text>}
     </Box>
   )
 }

@@ -43,6 +43,8 @@ Sort, resize and filter (in the terminal and desktop apps; VS Code and mobile sh
 
 - **Close**: press `q` while the pane has the keyboard, or click `close` under the table (Esc hands the keyboard back to the prompt; `ctrl+x x` also closes).
 
+The pane asks for a row per subagent (8 to 20 rows); rows that still do not fit are counted in a last line (`… 3 more above: make the pane taller`). Drag the pane taller to see them.
+
 Sort, widths and filter stay while the pane redraws or is closed and reopened.
 
 ## Options
