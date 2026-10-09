@@ -6,8 +6,8 @@ import type { TableState } from '../types'
 // color (`null`: the surface's default) and whether it still runs.
 export type TableRow = { id: string; cells: string[]; values: (string | number | null)[]; color: string | null; running: boolean }
 export type Align = 'l' | 'c' | 'r'
-// `sums` is the sum row for each filter; `aligns` the alignment of each column.
-export type TableProps = { heads: string[]; widths: number[]; aligns: Align[]; rows: TableRow[]; sums: Record<Filter, string[]>; view: TableState | null }
+// `sums` is the sum row for each filter; `aligns` the alignment of each column; `epoch` changes when the pane chose the view.
+export type TableProps = { heads: string[]; widths: number[]; aligns: Align[]; rows: TableRow[]; sums: Record<Filter, string[]>; view: TableState | null; epoch?: number }
 
 export type Sort = { col: number; dir: 'asc' | 'desc' }
 

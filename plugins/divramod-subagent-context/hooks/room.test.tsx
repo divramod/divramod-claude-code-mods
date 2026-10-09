@@ -40,7 +40,6 @@ test("the pane's top right shows the version of plugin.json", async ($, on) => {
   })
   const { ui } = await mounted($, on)
   expect(await ui.find({ type: 'Text', text: 'v9.8.7' })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: 'divramod subagents context' })).toBeDefined()
 })
 
 test('a button above the prompt opens the pane, and closes it when it is open', async ($, on) => {
@@ -90,4 +89,13 @@ test('the body is as tall as the pane the surface gave it, and follows it', asyn
     expect((await ui.findAll({ type: 'Box' })).some(b => b.props.height === bodyRows)).toBe(true)
     await ui.unmount()
   }
+})
+
+test("the pane's title in the window's first row is divramod subagents context", async ($, on) => {
+  const titles: unknown[] = []
+  on('command.register', () => ({ value: undefined as never }))
+  on('ui.open', (_$, e) => { titles.push(e.title); return { value: undefined as never } })
+  await mounted($, on)
+  await $.command.run({ command: 'divramod-subagent-context' } as never)
+  expect(titles).toContain('divramod subagents context')
 })

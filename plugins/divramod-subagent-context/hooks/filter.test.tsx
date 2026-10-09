@@ -51,3 +51,17 @@ test('a subagent has its row from its start, before its first step; a stop it wa
   expect((await texts())[0]).toMatch(/^│ ✗ │ alpha/)
   await ui.unmount()
 })
+
+test("the pane's own buttons a, r and f choose the filter without a click into the table", async ($, on) => {
+  const { ui, names, status } = await mounted($, on)
+  Object.assign(status, { beta: 'completed' })
+  await $.classic.SubagentStop(stop('beta'))
+  for (const [key, hotkey] of [['all', 'a'], ['running', 'r'], ['finished', 'f']] as const) expect((await ui.find({ type: 'Button', key }))?.props.hotkey).toBe(hotkey)
+  await ui.press({ key: 'running' })
+  expect(await names()).toEqual(['alpha', 'gamma'])
+  await ui.press({ key: 'finished' })
+  expect(await names()).toEqual(['beta'])
+  await ui.press({ key: 'all' })
+  expect(await names()).toEqual(['alpha', 'beta', 'gamma'])
+  await ui.unmount()
+})

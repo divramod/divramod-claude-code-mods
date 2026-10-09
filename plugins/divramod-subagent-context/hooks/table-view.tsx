@@ -5,6 +5,9 @@ import { type TableProps, type View, FILTERS, fit, fits, header, key, line, orde
 // Each instance's latest props: its listeners are set once and must see the tabs as last drawn.
 const latest = new WeakMap<object, TableProps>()
 
+// The epoch each instance last saw: a new one means the pane chose the view (a pane-level `a` `r` `f`), which it takes over.
+const epochs = new WeakMap<object, number>()
+
 // What each instance last posted (or started from), as JSON.
 const posted = new WeakMap<object, string>()
 
@@ -39,6 +42,11 @@ export default function TableView(props: TableProps, surface: ClientSurface<View
       if (next && next !== view) commit(surface, next)
     })
   }
+  if (epochs.has(surface) && epochs.get(surface) !== (props.epoch ?? 0)) {
+    surface.setState(restore(props))
+    posted.set(surface, JSON.stringify(saved(restore(props))))
+  }
+  epochs.set(surface, props.epoch ?? 0)
   const view = surface.state ?? restore(props)
   const filter = view.filter ?? 'all'
   const laid = fit(view.widths, surface.columns)

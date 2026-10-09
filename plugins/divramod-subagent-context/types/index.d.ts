@@ -26,6 +26,6 @@ export type TableState = {
 
 declare module 'claude-code' {
   interface PluginState {
-    'divramod-subagent-context': { rows: SubagentRow[]; view: TableState | null }
+    'divramod-subagent-context': { rows: SubagentRow[]; view: TableState | null; epoch: number }
   }
 }

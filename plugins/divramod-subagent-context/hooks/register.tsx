@@ -5,13 +5,23 @@ import type { SubagentRow, TableState } from '../types'
 import { LIMIT, type File, idOf, metaOf, rowOf } from './backfill'
 import { adopt, fill, mark, record } from './rows'
 import { parse, serialize } from './store'
-import { FILTERS, type TableProps, isClose, isState } from './grid'
+import { FILTERS, type Filter, type TableProps, isClose, isState } from './grid'
 import { ALIGNS, type Limits, WIDTHS, cells, color, foot, head, heads, limits, line, running, sums, values } from './table'
 
 const PANE = 'subagent-context'
 const rows = atom({ plugin: 'divramod-subagent-context', key: 'rows' } as const, [] as SubagentRow[])
 // The table's sort, widths and filter, so a redraw or a reopened pane shows them as they were (view-state rule).
 const view = atom({ plugin: 'divramod-subagent-context', key: 'view' } as const, null as TableState | null)
+// Bumped when a pane-level key changes the filter: the table is keyed by it, so it starts again from the kept view.
+const epoch = atom({ plugin: 'divramod-subagent-context', key: 'epoch' } as const, 0)
+
+// The pane's own keys `a` `r` `f`, like `q`: they work while the pane holds the keyboard, without a click into the table.
+async function choose($: EngineInterface, filter: Filter) {
+  const kept = await read($, view)
+  if ((kept?.filter ?? 'all') === filter) return
+  await update($, view, () => ({ sort: kept?.sort ?? null, widths: kept?.widths ?? WIDTHS, filter }))
+  await update($, epoch, n => n + 1)
+}
 
 // The agents `$.agent.list()` named, and the loop ids it does not (the engine's compaction and memory forks).
 type Known = { agents: Map<string, AgentInfo>; unlisted: Set<string> }
@@ -38,7 +48,7 @@ export const wanted = (subagents: number) => Math.min(20, Math.max(9, subagents 
 // Asks an open pane for the room its rows need; a pane the person closed stays closed.
 async function room($: EngineInterface, n: number) {
   const up = (await $.ui.panes()).some(p => p.id === PANE)
-  if (up) await $.ui.open({ id: PANE, title: 'Subagents: context', rows: wanted(n) })
+  if (up) await $.ui.open({ id: PANE, title: 'divramod subagents context', rows: wanted(n) })
 }
 
 // The version in the plugin's own plugin.json, shown at the pane's top right; empty when it cannot be read.
@@ -98,7 +108,7 @@ export const register: Register = (on, options) => {
     l = limits(options, (await $.session.usage()).context.window)
     // A module older than 0.1.7 pinned a summary line under the prompt; clearing it is harmless when none is set.
     void $.ui.status(undefined)
-    void $.ui.open({ id: PANE, title: 'Subagents: context', rows: wanted(0) })
+    void $.ui.open({ id: PANE, title: 'divramod subagents context', rows: wanted(0) })
     void earlier($).catch(() => {})
     return started
   })
@@ -131,7 +141,7 @@ export const register: Register = (on, options) => {
   })
 
   on('command.run', { command: 'divramod-subagent-context' }, async $ => {
-    await $.ui.open({ id: PANE, title: 'Subagents: context', rows: wanted((await read($, rows)).length), focus: true })
+    await $.ui.open({ id: PANE, title: 'divramod subagents context', rows: wanted((await read($, rows)).length), focus: true })
     return { text: 'Subagents pane opened.' }
   })
 
@@ -142,7 +152,7 @@ export const register: Register = (on, options) => {
     const toggle = async () => {
       const up = (await $.ui.panes()).some(p => p.id === PANE)
       if (up) await $.ui.close({ id: PANE })
-      else await $.ui.open({ id: PANE, title: 'Subagents: context', rows: wanted((await read($, rows)).length), focus: true })
+      else await $.ui.open({ id: PANE, title: 'divramod subagents context', rows: wanted((await read($, rows)).length), focus: true })
     }
     return (
       <Box>
@@ -172,6 +182,7 @@ export const register: Register = (on, options) => {
       rows: list.map(row => ({ id: row.id, cells: cells(row, l), values: values(row, l), color: color(row, l) ?? null, running: running(row) })),
       sums: Object.fromEntries(FILTERS.map(f => [f, sums(list.filter(r => f === 'all' || running(r) === (f === 'running')), l)])) as TableProps['sums'],
       view: await read($, view),
+      epoch: await read($, epoch),
     }
     const version = await versionOf($)
     const room = Math.max(1, (e.viewport?.rows ?? 24) - 5)
@@ -179,8 +190,7 @@ export const register: Register = (on, options) => {
     const body = e.props.scroll?.bodyRows
     return (
       <Box flexDirection="column" {...(body ? { height: body } : {})}>
-        <Box justifyContent="space-between">
-          <Text bold>divramod subagents context</Text>
+        <Box justifyContent="flex-end">
           <Text dimColor>{version ? `v${version}` : ''}</Text>
         </Box>
         {Client ? (
@@ -195,6 +205,8 @@ export const register: Register = (on, options) => {
         <Box>
           <Text dimColor>{`${foot(l)} · live · `}</Text>
           {/* The pane's own key: it works while the pane holds the keyboard, without a click into the table. */}
+          {FILTERS.map(f => <Button key={f} label={f} hotkey={f[0]!} plain onPress={() => choose($, f)} />)}
+          <Text dimColor> · </Text>
           <Button label="close" hotkey="q" plain onPress={() => $.ui.close({ id: PANE })} />
         </Box>
       </Box>
