@@ -197,7 +197,12 @@ export const register: Register = (on, options) => {
     const body = e.props.scroll?.bodyRows
     return (
       <Box flexDirection="column" {...(body ? { height: body } : {})}>
-        <Box justifyContent="flex-end">
+        {/* The surface draws no pane title, so the title is the body's first line: centered, the version at the right (a blank of its width at the left keeps it centered). */}
+        <Box>
+          <Text>{' '.repeat(version ? version.length + 1 : 0)}</Text>
+          <Box flexGrow={1} justifyContent="center">
+            <Text bold>divramod subagents context</Text>
+          </Box>
           <Text dimColor>{version ? `v${version}` : ''}</Text>
         </Box>
         {Client ? (
