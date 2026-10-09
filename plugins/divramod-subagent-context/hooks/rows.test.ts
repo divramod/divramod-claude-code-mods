@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { type Step, family, fill, record } from './rows'
+import { type Step, adopt, family, fill, record } from './rows'
 
 const step = (fill: number, at: number, id = 'a1'): Step => ({ id, description: 'Plan 0214 step 30', status: 'running', model: 'claude-opus-5-5', effort: 'high', fill, at })
 
@@ -29,4 +29,12 @@ test('a fill that drops by more than half counts as a compaction', async () => {
 test('two agents keep their own rows in the order they started', async () => {
   const rows = [step(10_000, 0, 'a1'), step(20_000, 1, 'a2'), step(30_000, 2, 'a1')].reduce(record, [])
   expect(rows.map(r => [r.id, r.now])).toEqual([['a1', 30_000], ['a2', 20_000]])
+})
+
+const found = (id: string, started: number) => ({ id, description: '', model: 'opus', effort: '', calls: 5, now: 1, peak: 2, compactions: 0, minutes: 1, started, mtime: started, status: 'completed' })
+
+test('adopted rows join the live ones in start order and never replace a live row', async () => {
+  const live = record([], step(40_000, 100, 'a1'))
+  const rows = adopt(live, [found('a1', 0), found('a0', 50)])
+  expect(rows.map(r => [r.id, r.calls])).toEqual([['a0', 5], ['a1', 1]])
 })

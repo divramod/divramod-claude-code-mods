@@ -13,6 +13,8 @@ export type SubagentRow = {
   mtime: number
   // Its AgentStatus as `$.agent.list()` last gave it.
   status: string
+  // Its transcript was over 4 MiB and was not read; calls, now, peak and compactions are 0 then.
+  large?: boolean
 }
 
 declare module 'claude-code' {

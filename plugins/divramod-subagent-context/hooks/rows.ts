@@ -32,3 +32,7 @@ export const record = (rows: readonly SubagentRow[], s: Step): SubagentRow[] => 
   }
   return was ? rows.map(r => (r === was ? row : r)) : [...rows, row]
 }
+
+// Rows read from transcripts join the live ones: a row `turn.step` already made wins (D4); all keep the order of `started`.
+export const adopt = (rows: readonly SubagentRow[], found: readonly SubagentRow[]): SubagentRow[] =>
+  [...rows, ...found.filter(f => !rows.some(r => r.id === f.id))].sort((a, b) => a.started - b.started)

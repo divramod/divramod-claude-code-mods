@@ -26,7 +26,12 @@ export const tone = (row: SubagentRow, l: Limits): 'red' | 'yellow' | undefined 
 export const head = (l: Limits) =>
   `${pad('Subagent', 36)} ${pad('Model', 7)} ${pad('Effort', 7)} ${pad('Calls', 5)} ${pad('Now', 6)} ${pad('Peak', 6)} ${pad(`%${label(l.window)}`, 5)} ${pad('Cmp', 3)} Min`
 
-export const line = (row: SubagentRow, l: Limits) =>
-  `${pad(row.description || row.id, 36)} ${pad(row.model, 7)} ${pad(row.effort || '-', 7)} ${pad(String(row.calls), 5)} ${pad(k(row.now), 6)} ${pad(k(row.peak), 6)} ${pad((share(row, l) * 100).toFixed(1), 5)} ${pad(String(row.compactions), 3)} ${row.minutes}`
+// A row whose transcript was too large to read shows `-` where it has no counts.
+export const line = (row: SubagentRow, l: Limits) => {
+  const [calls, now, peak, pct, cmp] = row.large
+    ? ['-', '-', '-', '-', '-']
+    : [String(row.calls), k(row.now), k(row.peak), (share(row, l) * 100).toFixed(1), String(row.compactions)]
+  return `${pad(row.description || row.id, 36)} ${pad(row.model || '-', 7)} ${pad(row.effort || '-', 7)} ${pad(calls, 5)} ${pad(now, 6)} ${pad(peak, 6)} ${pad(pct, 5)} ${pad(cmp, 3)} ${row.large ? '-' : row.minutes}`
+}
 
 export const foot = (l: Limits) => `warn ${Math.round(l.warn * 100)}% · stop ${Math.round(l.alert * 100)}% of ${label(l.window)}`

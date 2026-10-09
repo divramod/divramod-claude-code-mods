@@ -2,7 +2,8 @@ import { atom, read, update } from 'claude-code'
 import type { AgentInfo, EngineInterface, Register, TurnStepInput, TurnUsage } from 'claude-code'
 
 import type { SubagentRow } from '../types'
-import { fill, record } from './rows'
+import { LIMIT, type File, idOf, metaOf, rowOf } from './backfill'
+import { adopt, fill, record } from './rows'
 import { type Limits, foot, head, limits, line, share, tone } from './table'
 
 const PANE = 'subagent-context'
@@ -29,6 +30,32 @@ async function seen($: EngineInterface, known: Known, l: Limits, e: TurnStepInpu
   if (tone(row, l) && (!was || tone(was, l) !== tone(row, l))) $.ui.status(`subagent at ${Math.round(share(row, l) * 100)}% context`)
 }
 
+const list = ($: EngineInterface, dir: string) => $.fs.list(dir).catch(() => [])
+
+// The transcripts of this session's subagents: `<config>/projects/*/<session>/subagents/agent-*.jsonl`, with their dirs.
+async function transcripts($: EngineInterface, config: string, session: string) {
+  const found: (File & { dir: string })[] = []
+  for (const project of await list($, `${config}/projects`)) {
+    const dir = `${config}/projects/${project.name}/${session}/subagents`
+    if (project.kind === 'dir') for (const f of await list($, dir)) if (f.kind === 'file' && idOf(f.name)) found.push({ id: idOf(f.name)!, size: f.size, mtimeMs: f.mtimeMs, dir })
+  }
+  return found
+}
+
+// The subagents that ran before the mod loaded, from their transcripts; a row `turn.step` made already wins.
+async function earlier($: EngineInterface) {
+  const config = (await $.env.get('CLAUDE_CONFIG_DIR')) || `${await $.env.get('HOME')}/.claude`
+  const agents = new Map((await $.agent.list()).map(a => [a.id, a]))
+  const found: SubagentRow[] = []
+  for (const f of await transcripts($, config, await $.session.id())) {
+    const path = `${f.dir}/agent-${f.id}`
+    const meta = metaOf(await $.fs.read(`${path}.meta.json`).catch(() => undefined))
+    const text = f.size > LIMIT ? undefined : await $.fs.read(`${path}.jsonl`).catch(() => null)
+    if (text !== null) found.push(rowOf(f, meta, text, agents.get(f.id)))
+  }
+  await update($, rows, list => adopt(list, found))
+}
+
 export const register: Register = (on, options) => {
   let l: Limits = limits(options, 1_000_000)
   const known: Known = { agents: new Map(), unlisted: new Set() }
@@ -38,6 +65,7 @@ export const register: Register = (on, options) => {
     await $.command.register({ name: 'divramod-subagent-context', description: 'Show the context use of this session\'s subagents' })
     l = limits(options, (await $.session.usage()).context.window)
     void $.ui.open({ id: PANE, title: 'Subagents: context' })
+    void earlier($).catch(() => {})
     return started
   })
 
