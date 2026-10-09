@@ -20,7 +20,7 @@ const commit = (surface: ClientSurface<View>, next: View) => {
   surface.post(kept)
 }
 
-// The subagents' table, drawn on the surface: a click on a tab or `a` `r` `f` filters, `q` closes, a click on a header label
+// The subagents' table, drawn on the surface: a click on a tab, `a` `r` `f` or the arrow keys filter, `q` closes, a click on a header label
 // sorts, a drag on a border resizes (D14, D16).
 export default function TableView(props: TableProps, surface: ClientSurface<View>) {
   const { Box, Text } = surface.elements

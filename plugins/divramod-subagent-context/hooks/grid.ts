@@ -162,9 +162,10 @@ export const point = (view: View, e: ClientPointerEvent, laid: readonly number[]
   return view
 }
 
-// The keys `a` `r` `f` choose the filter.
+// The keys `a` `r` `f` choose the filter, `left` and `right` move to the tab before or after (the ends stay).
 export const key = (view: View, k: string): View => {
-  const filter = FILTERS.find(f => f[0] === k)
+  const at = FILTERS.indexOf(view.filter ?? 'all')
+  const filter = k === 'left' ? FILTERS[Math.max(0, at - 1)] : k === 'right' ? FILTERS[Math.min(FILTERS.length - 1, at + 1)] : FILTERS.find(f => f[0] === k)
   return filter && filter !== (view.filter ?? 'all') ? { ...view, filter } : view
 }
 
