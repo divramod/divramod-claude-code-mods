@@ -78,7 +78,11 @@ test('a stubbed step stream fills the rows and colors them by their share', asyn
   expect(step30?.props.color).toBe('yellow')
   expect((await ui.find({ type: 'Text', text: /Explore the hooks/, in: 'table' }))?.props.color).toBe('red')
   expect(await ui.find({ type: 'Text', text: /500k|700k/, in: 'table' })).toBeUndefined()
-  expect(status).toEqual(['subagent at 36% context', 'subagent at 31% context'])
+  expect(status).toEqual([
+    'subagents: 1 running · 0 finished · peak 4%',
+    'subagents: 2 running · 0 finished · peak 36% ⚠',
+    'subagents: 2 running · 0 finished · peak 36% ⚠',
+  ])
   await ui.unmount()
 })
 

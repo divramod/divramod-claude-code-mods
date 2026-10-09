@@ -14,6 +14,14 @@ claude plugin install divramod-subagent-context@divramod-claude-code-mods
 
 See the [repository README](../../README.md) for the requirements.
 
+## Open it, and the summary line
+
+- A `subagents` button sits above the prompt: click it to open the pane, click again to close it. Its hotkey `s`
+  works once that band has the keyboard (`ctrl+x tab` or a click on it).
+- `/divramod-subagent-context` opens the pane too.
+- A line under the prompt keeps the state at a glance: `subagents: 2 running · 3 finished · peak 36% ⚠` (`⚠` when a
+  row is red).
+
 ## The pane
 
 The pane opens with the session. Reopen it any time with the command `/divramod-subagent-context`.

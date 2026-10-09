@@ -12,6 +12,15 @@ const rows = atom({ plugin: 'divramod-subagent-context', key: 'rows' } as const,
 // The table's sort, widths and filter, so a redraw or a reopened pane shows them as they were (view-state rule).
 const view = atom({ plugin: 'divramod-subagent-context', key: 'view' } as const, null as TableState | null)
 
+// The one line the mod keeps under the prompt: how many run, how many are done, the highest peak; `⚠` at a red row.
+export const summary = (list: SubagentRow[], l: Limits) => {
+  if (!list.length) return undefined
+  const live = list.filter(running).length
+  const peak = Math.max(...list.map(r => share(r, l)))
+  const alert = list.some(r => tone(r, l) === 'red') ? ' ⚠' : ''
+  return `subagents: ${live} running · ${list.length - live} finished · peak ${Math.round(peak * 100)}%${alert}`
+}
+
 // The agents `$.agent.list()` named, and the loop ids it does not (the engine's compaction and memory forks).
 type Known = { agents: Map<string, AgentInfo>; unlisted: Set<string> }
 
@@ -27,10 +36,8 @@ async function seen($: EngineInterface, known: Known, l: Limits, e: TurnStepInpu
   const a = await agent($, known, e.agentId!)
   if (!a) return
   const step = { id: a.id, description: a.description, status: 'running', model: usage.model || e.model, effort: e.effort === undefined ? '' : String(e.effort), fill: fill(usage), at: await $.clock.now() }
-  const was = (await read($, rows)).find(r => r.id === a.id)
   const list = await update($, rows, list => record(list, step))
-  const row = list.find(r => r.id === a.id)!
-  if (tone(row, l) && (!was || tone(was, l) !== tone(row, l))) $.ui.status(`subagent at ${Math.round(share(row, l) * 100)}% context`)
+  $.ui.status(summary(list, l))
 }
 
 // The body rows the pane asks for: the tabs, the header, one per subagent and the footer, between 9 and 20. A pane
@@ -62,7 +69,7 @@ async function transcripts($: EngineInterface, config: string, session: string) 
 }
 
 // The subagents that ran before the mod loaded, from their transcripts; a row `turn.step` made already wins.
-async function earlier($: EngineInterface) {
+async function earlier($: EngineInterface, l: Limits) {
   const config = (await $.env.get('CLAUDE_CONFIG_DIR')) || `${await $.env.get('HOME')}/.claude`
   const agents = new Map((await $.agent.list()).map(a => [a.id, a]))
   const found: SubagentRow[] = []
@@ -72,7 +79,7 @@ async function earlier($: EngineInterface) {
     const text = f.size > LIMIT ? undefined : await $.fs.read(`${path}.jsonl`).catch(() => null)
     if (text !== null) found.push(rowOf(f, meta, text, agents.get(f.id)))
   }
-  await update($, rows, list => adopt(list, found))
+  $.ui.status(summary(await update($, rows, list => adopt(list, found)), l))
 }
 
 export const register: Register = (on, options) => {
@@ -84,7 +91,7 @@ export const register: Register = (on, options) => {
     await $.command.register({ name: 'divramod-subagent-context', description: 'Show the context use of this session\'s subagents' })
     l = limits(options, (await $.session.usage()).context.window)
     void $.ui.open({ id: PANE, title: 'Subagents: context', rows: wanted(0) })
-    void earlier($).catch(() => {})
+    void earlier($, l).catch(() => {})
     return started
   })
 
@@ -101,6 +108,7 @@ export const register: Register = (on, options) => {
     const a = await agent($, known, e.agent_id)
     const at = await $.clock.now()
     const list = await update($, rows, list => mark(list, { id: e.agent_id, description: a?.description ?? e.agent_type, status: 'running', at }))
+    $.ui.status(summary(list, l))
     await room($, list.length).catch(() => {})
     return result
   })
@@ -110,13 +118,30 @@ export const register: Register = (on, options) => {
     const listed = (await $.agent.list()).find(a => a.id === e.agent_id)?.status
     const status = listed === 'failed' || listed === 'killed' ? listed : 'completed'
     const at = await $.clock.now()
-    await update($, rows, list => (list.some(r => r.id === e.agent_id) ? mark(list, { id: e.agent_id, description: e.agent_type, status, at }) : list))
+    const list = await update($, rows, list => (list.some(r => r.id === e.agent_id) ? mark(list, { id: e.agent_id, description: e.agent_type, status, at }) : list))
+    $.ui.status(summary(list, l))
     return result
   })
 
   on('command.run', { command: 'divramod-subagent-context' }, async $ => {
     await $.ui.open({ id: PANE, title: 'Subagents: context', rows: wanted((await read($, rows)).length) })
     return { text: 'Subagents pane opened.' }
+  })
+
+  // A button above the prompt opens the pane, or closes it when it is open; a click presses it, `s` once the band has the keys.
+  on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
+    if (e.props.hasSurvey) return next(e)
+    const { Box, Button } = $.ui.resolve(e)
+    const toggle = async () => {
+      const up = (await $.ui.panes()).some(p => p.id === PANE)
+      if (up) await $.ui.close({ id: PANE })
+      else await $.ui.open({ id: PANE, title: 'Subagents: context', rows: wanted((await read($, rows)).length), focus: true })
+    }
+    return (
+      <Box>
+        <Button label="subagents" hotkey="s" plain onPress={toggle} />
+      </Box>
+    )
   })
 
   on('ui.message', async ($, e, next) => {
