@@ -2,15 +2,18 @@ import { atom, read, update } from 'claude-code'
 import type { Register } from 'claude-code'
 
 import type { SubagentRow } from '../types'
-import { ALERT, HEAD, WARN, line, share, tone } from './table'
+import { type Limits, foot, head, limits, line, share, tone } from './table'
 
 const PANE = 'subagent-context'
 const rows = atom({ plugin: 'divramod-subagent-context', key: 'rows' } as const, [] as SubagentRow[])
 
-export const register: Register = on => {
+export const register: Register = (on, options) => {
+  let l: Limits = limits(options, 1_000_000)
+
   on('session.start', async ($, e, next) => {
     const started = await next(e)
     await $.command.register({ name: 'divramod-subagent-context', description: 'Show the context use of this session\'s subagents' })
+    l = limits(options, (await $.session.usage()).context.window)
     const id = await $.session.id()
     const script = `${$.plugin.root}/hooks/measure.py`
     const refresh = async () => {
@@ -18,8 +21,8 @@ export const register: Register = on => {
       if (ran.exitCode !== 0) return
       const list = JSON.parse(ran.stdout) as SubagentRow[]
       await update($, rows, () => list)
-      const worst = list.reduce((m, r) => Math.max(m, share(r)), 0)
-      if (worst >= WARN) $.ui.status(`subagent at ${Math.round(worst * 100)}% context`)
+      const worst = list.reduce((m, r) => Math.max(m, share(r, l)), 0)
+      if (worst >= l.warn) $.ui.status(`subagent at ${Math.round(worst * 100)}% context`)
     }
     void refresh()
     $.clock.every(10_000, () => void refresh())
@@ -38,14 +41,14 @@ export const register: Register = on => {
     const room = Math.max(1, (e.viewport?.rows ?? 24) - 4)
     return (
       <Box flexDirection="column">
-        <Text bold>{HEAD}</Text>
+        <Text bold>{head(l)}</Text>
         {list.length === 0 && <Text dimColor>No subagents yet.</Text>}
         {list.slice(-room).map(row => (
-          <Text color={tone(row)}>
-            {line(row)}
+          <Text color={tone(row, l)}>
+            {line(row, l)}
           </Text>
         ))}
-        <Text dimColor>{`warn ${WARN * 100}% · stop ${ALERT * 100}% of 1M · refreshed every 10 s`}</Text>
+        <Text dimColor>{`${foot(l)} · refreshed every 10 s`}</Text>
       </Box>
     )
   })

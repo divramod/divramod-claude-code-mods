@@ -3,10 +3,47 @@
   "displayName": "Subagent Context",
   "version": "0.1.0",
   "description": "A Claude Code mod: a live pane of every subagent of the session with its model, effort, context fill, peak and compactions.",
-  "author": { "name": "Arvid Petermann", "url": "https://github.com/divramod" },
+  "author": {
+    "name": "Arvid Petermann",
+    "url": "https://github.com/divramod"
+  },
   "homepage": "https://github.com/divramod/divramod-claude-code-mods",
   "repository": "https://github.com/divramod/divramod-claude-code-mods",
   "license": "MIT",
-  "keywords": ["claude-code-mod", "subagents", "context", "pane"],
-  "types": "./types/index.d.ts"
+  "keywords": [
+    "claude-code-mod",
+    "subagents",
+    "context",
+    "pane"
+  ],
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "window": {
+      "type": "string",
+      "title": "Subagent context window",
+      "description": "The window a subagent's peak is counted against: auto takes this session's window",
+      "options": [
+        "auto",
+        "200k",
+        "1m"
+      ],
+      "default": "auto"
+    },
+    "warn_percent": {
+      "type": "number",
+      "title": "Warn at %",
+      "description": "A subagent's row turns yellow from this share of its window",
+      "min": 1,
+      "max": 100,
+      "default": 30
+    },
+    "alert_percent": {
+      "type": "number",
+      "title": "Alert at %",
+      "description": "A subagent's row turns red from this share of its window",
+      "min": 1,
+      "max": 100,
+      "default": 35
+    }
+  }
 }
