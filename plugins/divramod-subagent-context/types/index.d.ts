@@ -17,6 +17,12 @@ export type SubagentRow = {
   large?: boolean
 }
 
+// One Claude Code session of this machine, from `~/.claude/sessions/<pid>.json`; `plan` is its folder's `plans/CURRENT_PLAN`.
+export type SessionRow = { id: string; pid: number; name: string; cwd: string; kind: string; status: string; startedAt: number; plan: string; here: boolean }
+
+// The pane's top-level tab.
+export type Tab = 'subagents' | 'plans' | 'agents'
+
 // The table's sort, column widths and filter, as its Client last posted them; kept for the session.
 export type TableState = {
   sort: { col: number; dir: 'asc' | 'desc' } | null
@@ -28,6 +34,6 @@ export type TableState = {
 
 declare module 'claude-code' {
   interface PluginState {
-    'divramod-subagent-context': { rows: SubagentRow[]; view: TableState | null; epoch: number }
+    'divramod-subagent-context': { rows: SubagentRow[]; view: TableState | null; epoch: number; sessions: SessionRow[]; tab: Tab }
   }
 }

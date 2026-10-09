@@ -48,13 +48,23 @@ Sort, resize and filter (in the terminal and desktop apps; VS Code and mobile sh
 
 - **Sort**: click a header: ascending, descending, off.
 - **Resize**: drag any column border, on the header or on any row, left or right. The table is never stretched, and never wider than the pane: the Subagent column gives way.
-- **Filter**: click the tabs All, Running, Finished, or press `a`, `r`, `f`.
+- **Filter**: click the tabs All, Running, Finished, or press `r` (running), `f` (finished), `h` / `l` or the left / right arrows (the tab before / after).
+- **Rows**: `j` / `k` or the down / up arrows move a highlighted row; the pane's own keys (buttons under the table) work while the pane has the keyboard, the arrows once the table has it.
 
 - **Close**: press `q` while the pane has the keyboard, or click `close` under the table (Esc hands the keyboard back to the prompt; `ctrl+x x` also closes).
 
-The pane's top right shows the mod's version. The table is as tall as the pane, so it grows when you maximize the window and shrinks when you make it smaller again. It asks for a row per subagent (9 to 20 rows); rows that do not fit are counted in a last line (`… 3 more above: make the pane taller`).
+The pane's top right shows the mod's version. The table is as tall as the pane, so it grows when you maximize the window and shrinks when you make it smaller again. It asks for a row per subagent (9 to 20 rows); rows that do not fit are counted in a last line (`… 3 more: make the pane taller`).
 
 Sort, widths and filter stay while the pane redraws or is closed and reopened.
+
+## Three tabs
+
+The bar under the title switches the pane: **subagents** (`s`, this table), **plans** (`p`) and **agents** (`a`).
+Plans lists the Claude Code sessions of this machine whose folder has a `plans/CURRENT_PLAN`, with the plan, the
+session's name, its folder, its status and its age; Agents lists every live session the same way. `●` marks this
+session. Both read `<config>/sessions/<pid>.json` (the files Claude Code keeps for each running session), check with `ps`
+that the process still runs, and reload every 10 seconds while the module is loaded. A name is the session's own name,
+else its folder's.
 
 ## Remembered rows
 

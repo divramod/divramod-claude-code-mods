@@ -1,10 +1,11 @@
 import { atom, read, update } from 'claude-code'
 import type { AgentInfo, EngineInterface, Register, TurnStepInput, TurnUsage } from 'claude-code'
 
-import type { SubagentRow, TableState } from '../types'
+import type { SessionRow, SubagentRow, TableState, Tab } from '../types'
 import { LIMIT, type File, idOf, metaOf, rowOf } from './backfill'
 import { adopt, fill, mark, record } from './rows'
 import { parse, serialize } from './store'
+import { agentsGrid, lines as gridLines, ordered, parse as parseSession, plansGrid, planOf } from './sessions'
 import { FILTERS, type Filter, type TableProps, type TableRow, isClose, isState, order, shown, step } from './grid'
 import { ALIGNS, type Limits, WIDTHS, cells, color, foot, head, heads, limits, line, running, sums, values } from './table'
 
@@ -28,6 +29,45 @@ async function press($: EngineInterface, l: Limits, key: string) {
   if (next === state) return
   await update($, view, () => ({ sort: next.sort, widths: next.widths, filter: next.filter, cursor: next.cursor ?? null }))
   await update($, epoch, n => n + 1)
+}
+// The pane's top-level tab and the sessions of this machine the Plans and Agents tabs list (reloaded every 10 seconds).
+const tab = atom({ plugin: 'divramod-subagent-context', key: 'tab' } as const, 'subagents' as Tab)
+const sessions = atom({ plugin: 'divramod-subagent-context', key: 'sessions' } as const, [] as SessionRow[])
+const TABS = [['subagents', 's'], ['plans', 'p'], ['agents', 'a']] as const
+
+const configDir = async ($: EngineInterface) => (await $.env.get('CLAUDE_CONFIG_DIR')) || `${await $.env.get('HOME')}/.claude`
+
+// The live sessions of this machine: each `<config>/sessions/<pid>.json` whose process still runs (`ps`), with the plan its
+// folder names. A file or a plan that cannot be read is left out, never an error.
+async function loadSessions($: EngineInterface, config: string, session: string) {
+  const dir = `${config}/sessions`
+  const found: NonNullable<ReturnType<typeof parseSession>>[] = []
+  for (const f of await $.fs.list(dir).catch(() => [])) {
+    if (f.kind !== 'file' || !/^\d+\.json$/.test(f.name)) continue
+    const s = parseSession(String(await $.fs.read(`${dir}/${f.name}`).catch(() => '')))
+    if (s) found.push(s)
+  }
+  if (!found.length) return []
+  const ps = await $.process.run(['ps', '-o', 'pid=', '-p', found.map(s => s.pid).join(',')]).catch(() => undefined)
+  const alive = new Set(String(ps?.stdout ?? '').split('\n').map(l => l.trim()).filter(Boolean))
+  const out: SessionRow[] = []
+  for (const s of found.filter(s => alive.has(String(s.pid)))) {
+    out.push({ ...s, plan: planOf(String(await $.fs.read(`${s.cwd}/plans/CURRENT_PLAN`).catch(() => ''))), here: s.id === session })
+  }
+  return out
+}
+
+// Reloads the sessions; the atom is written only when they changed, so a quiet round redraws nothing.
+async function refresh($: EngineInterface) {
+  try {
+    const next = await loadSessions($, await configDir($), await $.session.id())
+    if (JSON.stringify(next) !== JSON.stringify(await read($, sessions))) await update($, sessions, () => next)
+  } catch {}
+}
+
+async function show($: EngineInterface, to: Tab) {
+  await update($, tab, () => to)
+  if (to !== 'subagents') await refresh($)
 }
 
 // The agents `$.agent.list()` named, and the loop ids it does not (the engine's compaction and memory forks).
@@ -117,6 +157,8 @@ export const register: Register = (on, options) => {
     void $.ui.status(undefined)
     void $.ui.open({ id: PANE, title: 'divramod subagents context', rows: wanted(0) })
     void earlier($).catch(() => {})
+    void refresh($)
+    void $.clock.every(10_000, () => refresh($))
     return started
   })
 
@@ -192,6 +234,9 @@ export const register: Register = (on, options) => {
       epoch: await read($, epoch),
     }
     const version = await versionOf($)
+    const current = await read($, tab)
+    const found = await read($, sessions)
+    const now = current === 'subagents' ? 0 : await $.clock.now()
     const room = Math.max(1, (e.viewport?.rows ?? 24) - 5)
     // The body is as tall as the pane the surface gave it, so the table grows and shrinks with the window.
     const body = e.props.scroll?.bodyRows
@@ -205,24 +250,42 @@ export const register: Register = (on, options) => {
           </Box>
           <Text dimColor>{version ? `v${version}` : ''}</Text>
         </Box>
-        {Client ? (
-          <Client key="table" module="./table-view.tsx" props={table} flexGrow={1} />
-        ) : (
-          <Box flexDirection="column">
-            <Text bold>{head(l)}</Text>
-            {list.length === 0 && <Text dimColor>No subagents yet.</Text>}
-            {list.slice(-room).map(row => <Text color={color(row, l)}>{line(row, l)}</Text>)}
-          </Box>
-        )}
-        <Text dimColor>{`${foot(l)} · live`}</Text>
-        {/* The pane's own keys: they work while the pane holds the keyboard, without a click into the table. */}
-        <Box gap={1}>
-          {FILTERS.map(f => <Button key={f} label={f} hotkey={f[0]!} plain onPress={() => press($, l, f[0]!)} />)}
-          <Text dimColor>·</Text>
-          {([['h', 'prev'], ['l', 'next'], ['j', 'down'], ['k', 'up']] as const).map(([k, label]) => <Button key={label} label={label} hotkey={k} plain onPress={() => press($, l, k)} />)}
-          <Text dimColor>·</Text>
-          <Button label="close" hotkey="q" plain onPress={() => $.ui.close({ id: PANE })} />
+        <Box gap={2}>
+          {TABS.map(([t, key]) => {
+            const label = `${t} ${t === 'subagents' ? list.length : ordered(found, t === 'plans').length}`
+            return t === current ? <Text key={t} bold inverse>{` ${key}: ${label} `}</Text> : <Button key={t} label={label} hotkey={key} plain onPress={() => show($, t)} />
+          })}
         </Box>
+        {current === 'subagents' ? (
+          <>
+            {Client ? (
+              <Client key="table" module="./table-view.tsx" props={table} flexGrow={1} />
+            ) : (
+              <Box flexDirection="column">
+                <Text bold>{head(l)}</Text>
+                {list.length === 0 && <Text dimColor>No subagents yet.</Text>}
+                {list.slice(-room).map(row => <Text color={color(row, l)}>{line(row, l)}</Text>)}
+              </Box>
+            )}
+            <Text dimColor>{`${foot(l)} · live`}</Text>
+            {/* The pane's own keys: they work while the pane holds the keyboard, without a click into the table. */}
+            <Box gap={1}>
+              {FILTERS.filter(f => f !== 'all').map(f => <Button key={f} label={f} hotkey={f[0]!} plain onPress={() => press($, l, f[0]!)} />)}
+              <Text dimColor>·</Text>
+              {([['h', 'prev'], ['l', 'next'], ['j', 'down'], ['k', 'up']] as const).map(([k, label]) => <Button key={label} label={label} hotkey={k} plain onPress={() => press($, l, k)} />)}
+              <Text dimColor>·</Text>
+              <Button label="close" hotkey="q" plain onPress={() => $.ui.close({ id: PANE })} />
+            </Box>
+          </>
+        ) : (
+          <>
+            <Box flexDirection="column" flexGrow={1}>
+              {gridLines(current === 'plans' ? plansGrid(found, now) : agentsGrid(found, now), current === 'plans' ? 'No session has a current plan.' : 'No Claude sessions found.').map((t, i) => <Text key={String(i)} dimColor={/^[┌├└]/.test(t)}>{t}</Text>)}
+            </Box>
+            <Text dimColor>{`${ordered(found, current === 'plans').length} sessions · reloaded every 10 s · ● this session`}</Text>
+            <Button label="close" hotkey="q" plain onPress={() => $.ui.close({ id: PANE })} />
+          </>
+        )}
       </Box>
     )
   })

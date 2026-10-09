@@ -100,3 +100,37 @@ test("the pane's title in the window's first row is divramod subagents context",
   await $.command.run({ command: 'divramod-subagent-context' } as never)
   expect(titles).toContain('divramod subagents context')
 })
+
+const entry = (name: string, size: number) => ({ name, kind: 'file' as const, size, mtimeMs: 0, isLink: false })
+
+// The sessions of this machine: two live ones (one with a plan) and one whose process is gone.
+const session = (pid: number, name: string, cwd: string) => JSON.stringify({ pid, sessionId: `S${pid}`, cwd, name, kind: 'interactive', status: 'idle', startedAt: 0 })
+
+test('s, p and a switch between the subagents, the plans of the live sessions and all their names', async ($, on) => {
+  mock.env(on, { HOME: '/h' })
+  const files: Record<string, string> = {
+    '/h/.claude/sessions/11.json': session(11, 'hal2-03', '/w/worktree/hal2/03'),
+    '/h/.claude/sessions/12.json': session(12, 'hal2-04', '/w/worktree/hal2/04'),
+    '/h/.claude/sessions/13.json': session(13, 'gone', '/w/worktree/hal2/05'),
+    '/w/worktree/hal2/03/plans/CURRENT_PLAN': '0222-publish\n',
+  }
+  on('session.id', () => ({ value: 'S11' }))
+  on('fs.list', (_$, e) => ({ value: e.path === '/h/.claude/sessions' ? Object.keys(files).filter(f => f.startsWith(e.path)).map(f => entry(f.split('/').at(-1)!, 10)) : [] }))
+  on('fs.read', (_$, e) => {
+    if (!(e.path in files)) throw new Error(`ENOENT ${e.path}`)
+    return { value: files[e.path]! }
+  })
+  on('process.run', () => ({ value: { exitCode: 0, stdout: '11\n12\n', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } as never }))
+  const { ui } = await mounted($, on)
+  expect((await ui.find({ type: 'Button', key: 'plans' }))?.props.hotkey).toBe('p')
+  await ui.press({ key: 'plans' })
+  const texts = async () => (await ui.findAll({ type: 'Text' })).map(t => t.text)
+  expect((await texts()).some(t => t.includes('0222-publish') && t.includes('● hal2-03'))).toBe(true)
+  expect((await texts()).some(t => t.includes('hal2-04'))).toBe(false)
+  await ui.press({ key: 'agents' })
+  expect((await texts()).some(t => t.includes('hal2-04'))).toBe(true)
+  expect((await texts()).some(t => t.includes('gone'))).toBe(false)
+  await ui.press({ key: 'subagents' })
+  expect(await ui.find({ type: 'Text', text: /alpha/, in: 'table' })).toBeDefined()
+  await ui.unmount()
+})
