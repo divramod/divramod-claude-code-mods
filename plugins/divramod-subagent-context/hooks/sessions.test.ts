@@ -44,3 +44,11 @@ test('a grid wider than the pane is fitted to it: no line is longer, the widest 
   expect(out.some(l => l.includes('…'))).toBe(true)
   expect(new Set(out.map(l => l.length)).size).toBe(1)
 })
+
+test('rows past the pane are counted, and a session takes one line', () => {
+  const rows = Array.from({ length: 6 }, (_, i) => row({ id: String(i), name: `n${i}`, plan: '0149' }))
+  const out = lines(plansGrid(rows, 0), 'none', 100, 3)
+  expect(out).toHaveLength(8)
+  expect(out.at(-1)).toBe('… 3 more: make the pane taller')
+  expect(lines(plansGrid(rows, 0), 'none', 100)).toHaveLength(10)
+})

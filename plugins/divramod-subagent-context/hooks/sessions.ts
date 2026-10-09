@@ -69,12 +69,14 @@ export const widths = (g: Grid, columns: number) => {
   return laid
 }
 
-// The grid as box-drawn lines like the subagents' table, fitted to `columns`, a rule between the rows; `empty` says so
-// when there is no row.
-export const lines = (g: Grid, empty: string, columns = 0) => {
+// The grid as box-drawn lines like the subagents' table, fitted to `columns` wide, no rules between rows (so a session
+// takes one line); at most `max` rows, the rest counted in a last line. `empty` says so when there is no row.
+export const lines = (g: Grid, empty: string, columns = 0, max = Infinity) => {
   const laid = widths(g, columns)
-  const out = [rule(laid, 'top'), line(g.heads, laid, g.aligns), rule(laid, 'mid')]
-  g.cells.forEach((c, i) => out.push(...(i ? [rule(laid, 'mid')] : []), line(c, laid, g.aligns)))
+  const shown = g.cells.slice(0, Math.max(1, max))
+  const out = [rule(laid, 'top'), line(g.heads, laid, g.aligns), rule(laid, 'mid'), ...shown.map(c => line(c, laid, g.aligns))]
   if (!g.cells.length) out.push(line([empty], [laid.reduce((sum, w) => sum + w + 1, -1)], ['l']))
-  return [...out, rule(laid, 'bottom')]
+  out.push(rule(laid, 'bottom'))
+  if (g.cells.length > shown.length) out.push(`… ${g.cells.length - shown.length} more: make the pane taller`)
+  return out
 }
