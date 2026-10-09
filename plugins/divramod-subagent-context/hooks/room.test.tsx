@@ -1,20 +1,19 @@
 import { expect, mock, test } from 'claude-code/testing'
 
 import { wanted } from './register'
-import { mounted } from './testkit'
+import { PANE, mounted, steps } from './testkit'
 
 test('the pane asks for a row per subagent, between 9 and 20', () => {
   expect([0, 5, 9, 30].map(wanted)).toEqual([9, 9, 13, 20])
 })
 
 test('rows that do not fit are counted, not dropped silently', async ($, on) => {
-  const { ui, all } = await mounted($, on)
-  await ui.resize({ columns: 100, rows: 4, in: 'table' })
-  const texts = await all()
-  // Two rows of room: one subagent and the count of the other two.
-  expect(texts.filter(t => /^[●✓✗] /.test(t))).toHaveLength(1)
-  expect(texts.some(t => t.startsWith('… 2 more above'))).toBe(true)
-  await ui.resize({ columns: 100, rows: 10, in: 'table' })
+  const { ui, all, texts } = await mounted($, on)
+  await ui.resize({ columns: 120, rows: 9, in: 'table' })
+  // Nine lines: the frame takes six, one row fits, the last line counts the other two.
+  expect(await texts()).toHaveLength(1)
+  expect((await all()).some(t => t.startsWith('… 2 more above'))).toBe(true)
+  await ui.resize({ columns: 120, rows: 24, in: 'table' })
   expect((await all()).some(t => t.startsWith('…'))).toBe(false)
 })
 
@@ -80,4 +79,14 @@ test('the command opens the pane focused, the start of a session does not take t
   await $.session.start({ cwd: '/w' } as never)
   await $.command.run({ command: 'divramod-subagent-context' } as never)
   expect(asked).toEqual([undefined, true])
+})
+
+// The test engine lays no heights out, so this checks what the engine is asked for: a body as tall as the pane's.
+test('the body is as tall as the pane the surface gave it, and follows it', async ($, on) => {
+  await steps($, on)
+  for (const bodyRows of [10, 30]) {
+    const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, scroll: { offset: 0, bodyRows } } })
+    expect((await ui.findAll({ type: 'Box' })).some(b => b.props.height === bodyRows)).toBe(true)
+    await ui.unmount()
+  }
 })

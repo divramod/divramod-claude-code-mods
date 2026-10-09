@@ -4,14 +4,14 @@ import type { SubagentRow } from '../types'
 import { limits, line, tone } from './table'
 
 const row = (peak: number, compactions = 0): SubagentRow => ({
-  id: 'a1', description: 'Plan 0214 step 30', model: 'opus', effort: 'xhigh', calls: 40, now: peak, peak, compactions, minutes: 5, started: 0, mtime: 1, status: 'running',
+  id: 'a1', description: 'Plan 0214 step 30', model: 'opus', effort: 'xhigh', calls: 40, now: peak, peak, compactions, seconds: 300, started: 0, mtime: 1, status: 'running',
 })
 
 const DEFAULTS = limits({}, 1_000_000)
 const PANE = { plugin: 'divramod-subagent-context', surface: 'terminal', component: 'Pane', props: { title: 'Subagents: context', isFocused: true, bodyColumns: 120, placement: 'dock', scroll: { offset: 0, bodyRows: 20 }, view: {} }, requestId: 'subagent-context', viewport: { columns: 120, rows: 24 } } as const
 
 test('a row names the step, model, effort, peak and its share of the window', async () => {
-  expect(line(row(310_000), DEFAULTS)).toMatch(/step 30\s+opus\s+xhigh\s+40\s+310k\s+310k\s+31\.0\s+0\s+5/)
+  expect(line(row(310_000), DEFAULTS)).toMatch(/step 30\s+opus\s+xhigh\s+40\s+310k\s+310k\s+31\.0\s+0\s+05:00/)
 })
 
 test('a row is plain below 30%, yellow from 30%, red from 35% or after a compaction', async () => {
@@ -73,9 +73,9 @@ test('a stubbed step stream fills the rows and colors them by their share', asyn
   }
   for (const [tokens, id] of [[40_000, 'a1'], [360_000, 'a2'], [500_000, 'fork'], [310_000, 'a1']] as const) await run(tokens, id)
   expect((await run(700_000)).stopReason).toBe('end_turn')
-  const step30 = await ui.find({ type: 'Text', text: /step 30\s+opus\s+high\s+2\s+310k\s+310k\s+31\.0/, in: 'table' })
+  const step30 = await ui.find({ type: 'Text', text: /^│ . │ Plan 0214 step 30\s+│\s+opus\s+│\s+high\s+│\s+2 │\s+310k │\s+310k │\s+31\.0 /, in: 'table' })
   expect(step30?.props.color).toBe('yellow')
-  expect((await ui.find({ type: 'Text', text: /Explore the hooks/, in: 'table' }))?.props.color).toBe('red')
+  expect((await ui.find({ type: 'Text', text: /^│ . │ Explore the hooks/, in: 'table' }))?.props.color).toBe('red')
   expect(await ui.find({ type: 'Text', text: /500k|700k/, in: 'table' })).toBeUndefined()
   await ui.unmount()
 })
@@ -110,8 +110,8 @@ test('at the start the pane lists the subagents that ran before the mod loaded',
   await $.session.start({ cwd: '/w', surface: 'terminal', isInteractive: true })
   await clock.settle()
   const ui = await $.ui.mount(PANE)
-  const old = await ui.find({ type: 'Text', text: /Old one\s+sonnet\s+high\s+2\s+120k\s+120k/, in: 'table' })
+  const old = await ui.find({ type: 'Text', text: /Old one\s+│\s+sonnet\s+│\s+high\s+│\s+2 │\s+120k │\s+120k /, in: 'table' })
   expect(old).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /agent-big|big\s+-\s+-\s+-/, in: 'table' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /agent-big|big\s+│\s+-\s+│\s+-\s+│\s+-/, in: 'table' })).toBeDefined()
   await ui.unmount()
 })

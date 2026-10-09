@@ -1,6 +1,6 @@
 import type { ClientSurface } from 'claude-code'
 
-import { type TableProps, type View, FILTERS, fit, header, key, order, point, restore, row, saved, shown, tabs } from './grid'
+import { type TableProps, type View, FILTERS, fit, fits, header, key, line, order, point, restore, rule, saved, shown, tabs } from './grid'
 
 // Each instance's latest props: its listeners are set once and must see the tabs as last drawn.
 const latest = new WeakMap<object, TableProps>()
@@ -43,12 +43,10 @@ export default function TableView(props: TableProps, surface: ClientSurface<View
   const filter = view.filter ?? 'all'
   const laid = fit(view.widths, surface.columns)
   const rows = order(shown(props.rows, filter), view.sort)
-  // As many rows as fit below the tabs and the header: the newest unsorted, the first ones sorted.
-  const room = surface.rows > 2 ? surface.rows - 2 : rows.length
-  // Rows that do not fit are counted in the last line, so none is hidden silently.
-  const hidden = rows.length > room && room > 1 ? rows.length - room + 1 : 0
-  const fits = room - (hidden ? 1 : 0)
-  const visible = view.sort ? rows.slice(0, fits) : rows.slice(-fits)
+  // As many rows as fit between the lines the table itself needs: the newest unsorted, the first ones sorted.
+  const room = fits(rows.length, surface.rows)
+  const hidden = rows.length - room
+  const visible = view.sort ? rows.slice(0, room) : rows.slice(rows.length - room)
   return (
     <Box flexDirection="column">
       <Box flexDirection="row" gap={1}>
@@ -58,14 +56,20 @@ export default function TableView(props: TableProps, surface: ClientSurface<View
           </Text>
         ))}
       </Box>
-      <Text bold>{header(props.heads, laid, view.sort)}</Text>
-      {rows.length === 0 && <Text dimColor>{props.rows.length ? 'No subagents in this view.' : 'No subagents yet.'}</Text>}
-      {visible.map(r => (
-        <Text key={r.id} color={r.color ?? undefined}>
-          {row(r.cells, laid)}
-        </Text>
+      <Text dimColor>{rule(laid, 'top')}</Text>
+      <Text bold>{header(props.heads, laid, props.aligns, view.sort)}</Text>
+      <Text dimColor>{rule(laid, 'mid')}</Text>
+      {rows.length === 0 && <Text dimColor>{line([props.rows.length ? 'No subagents in this view.' : 'No subagents yet.'], [laid.reduce((sum, w) => sum + w + 1, -1)], ['l'])}</Text>}
+      {visible.map((r, i) => (
+        <Box key={r.id} flexDirection="column">
+          {i > 0 && <Text dimColor>{rule(laid, 'mid')}</Text>}
+          <Text color={r.color ?? undefined}>{line(r.cells, laid, props.aligns)}</Text>
+        </Box>
       ))}
       {hidden > 0 && <Text dimColor>{`… ${hidden} more ${view.sort ? 'below' : 'above'}: make the pane taller`}</Text>}
+      <Text dimColor>{rule(laid, 'mid')}</Text>
+      <Text bold>{line(props.sums[filter], laid, props.aligns)}</Text>
+      <Text dimColor>{rule(laid, 'bottom')}</Text>
     </Box>
   )
 }

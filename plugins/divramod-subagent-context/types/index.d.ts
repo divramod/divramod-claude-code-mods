@@ -7,7 +7,7 @@ export type SubagentRow = {
   now: number
   peak: number
   compactions: number
-  minutes: number
+  seconds: number
   // When its first and its latest step were seen (`$.clock.now()` ms); rows keep the order of `started`.
   started: number
   mtime: number

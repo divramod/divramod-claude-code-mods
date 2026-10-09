@@ -31,27 +31,46 @@ const glyph = (row: SubagentRow) => (running(row) ? '●' : row.status === 'comp
 // The context tone wins; a running row is cyan otherwise, the state column keeps it recognisable (D14).
 export const color = (row: SubagentRow, l: Limits) => tone(row, l) ?? (running(row) ? 'cyan' : undefined)
 
-// The table's columns and their start widths; the last one takes the rest of the room.
-export const WIDTHS = [1, 36, 7, 7, 5, 6, 6, 5, 3, 4]
+// `Plan 0149 row 232: Automations plugin` → `149-232: Automations plugin`; a part stays (`149-163 part 2: e2e`).
+export const short = (description: string) => {
+  const m = /^Plan 0*(\d+) row (\d+)( part \d+)?: (.*)$/.exec(description)
+  return m ? `${m[1]}-${m[2]}${m[3] ?? ''}: ${m[4]}` : description
+}
 
-export const heads = (l: Limits) => [' ', 'Subagent', 'Model', 'Effort', 'Calls', 'Now', 'Peak', `%${label(l.window)}`, 'Cmp', 'Min']
+// A duration as `mm:ss` (`125:30` past two hours).
+export const clock = (seconds: number) => `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`
+
+// The table's columns, their start widths (a cell is padded by a space each side) and how each is aligned.
+export const WIDTHS = [3, 34, 9, 10, 9, 7, 8, 9, 7, 8]
+export type Align = 'l' | 'c' | 'r'
+export const ALIGNS: Align[] = ['c', 'l', 'c', 'c', 'r', 'r', 'r', 'r', 'r', 'r']
+
+export const heads = (l: Limits) => [' ', 'Subagent', 'Model', 'Effort', 'Calls', 'Now', 'Peak', `%${label(l.window)}`, 'Cmp', 'Time']
 
 // A row whose transcript was too large to read shows `-` where it has no counts.
 export const cells = (row: SubagentRow, l: Limits) => {
-  const [calls, now, peak, pct, cmp, min] = row.large
+  const [calls, now, peak, pct, cmp, time] = row.large
     ? ['-', '-', '-', '-', '-', '-']
-    : [String(row.calls), k(row.now), k(row.peak), (share(row, l) * 100).toFixed(1), String(row.compactions), String(row.minutes)]
-  return [glyph(row), row.description || row.id, row.model || '-', row.effort || '-', calls, now, peak, pct, cmp, min]
+    : [String(row.calls), k(row.now), k(row.peak), (share(row, l) * 100).toFixed(1), String(row.compactions), clock(row.seconds)]
+  return [glyph(row), short(row.description || row.id), row.model || '-', row.effort || '-', calls, now, peak, pct, cmp, time]
+}
+
+// The sum row of some rows: how many, and the totals of the counts (a row without counts adds nothing).
+export const sums = (list: readonly SubagentRow[], l: Limits) => {
+  const add = (pick: (r: SubagentRow) => number) => list.reduce((sum, r) => sum + (r.large ? 0 : pick(r)), 0)
+  return ['Σ', `${list.length} subagent${list.length === 1 ? '' : 's'}`, '', '', String(add(r => r.calls)), k(add(r => r.now)), k(add(r => r.peak)), (add(r => share(r, l)) * 100).toFixed(1), String(add(r => r.compactions)), clock(add(r => r.seconds))]
 }
 
 // What a column sorts by: text, or a number; `null` (a large row's counts) sorts last either way. The state column
 // sorts running, completed, then failed and killed.
 export const values = (row: SubagentRow, l: Limits): (string | number | null)[] => {
   const n = (v: number) => (row.large ? null : v)
-  return [running(row) ? 0 : row.status === 'completed' ? 1 : 2, row.description || row.id, row.model, row.effort, n(row.calls), n(row.now), n(row.peak), n(share(row, l)), n(row.compactions), n(row.minutes)]
+  return [running(row) ? 0 : row.status === 'completed' ? 1 : 2, short(row.description || row.id), row.model, row.effort, n(row.calls), n(row.now), n(row.peak), n(share(row, l)), n(row.compactions), n(row.seconds)]
 }
 
-const join = (texts: string[]) => texts.map((t, i) => (i === texts.length - 1 ? t : pad(t, WIDTHS[i]!))).join(' ')
+// The plain lines of a surface that draws no table (VS Code, mobile).
+const PLAIN = [1, 36, 7, 7, 5, 6, 6, 5, 3, 6]
+const join = (texts: string[]) => texts.map((t, i) => (i === texts.length - 1 ? t : pad(t, PLAIN[i]!))).join(' ')
 
 export const head = (l: Limits) => join(heads(l))
 

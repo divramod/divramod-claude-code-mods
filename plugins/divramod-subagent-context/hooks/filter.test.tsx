@@ -13,7 +13,7 @@ test('each filter shows the right rows, chosen by a click on its tab or by its k
   await $.classic.SubagentStop(stop('beta'))
   await $.classic.SubagentStop(stop('gamma'))
   expect((await all()).slice(0, 3)).toEqual([' All 3 ', ' Running 1 ', ' Finished 2 '])
-  expect((await texts()).slice(1).map(t => t[0])).toEqual(['●', '✓', '✗'])
+  expect((await texts()).map(t => t.split('│')[1]!.trim())).toEqual(['●', '✓', '✗'])
   await click(10, 0)
   expect(await names()).toEqual(['alpha'])
   expect((await ui.find({ type: 'Text', text: ' Running 1 ', in: 'table' }))?.props.inverse).toBe(true)
@@ -30,12 +30,12 @@ test('each filter shows the right rows, chosen by a click on its tab or by its k
 
 test('a running row is cyan unless warn or alert; a finished one has the default color', async ($, on) => {
   const { ui, status } = await mounted($, on)
-  const tone = async (name: string) => (await ui.find({ type: 'Text', text: new RegExp(`^. ${name} `), in: 'table' }))?.props.color
+  const tone = async (name: string) => (await ui.find({ type: 'Text', text: new RegExp(`^│ . │ ${name} `), in: 'table' }))?.props.color
   expect([await tone('alpha'), await tone('beta'), await tone('gamma')]).toEqual(['yellow', 'cyan', 'cyan'])
   status.beta = 'completed'
   await $.classic.SubagentStop(stop('beta'))
   expect(await tone('beta')).toBeUndefined()
-  const row = { id: 'x', description: 'x', model: 'opus', effort: 'high', calls: 1, now: 360_000, peak: 360_000, compactions: 0, minutes: 1, started: 0, mtime: 0, status: 'running' } satisfies SubagentRow
+  const row = { id: 'x', description: 'x', model: 'opus', effort: 'high', calls: 1, now: 360_000, peak: 360_000, compactions: 0, seconds: 60, started: 0, mtime: 0, status: 'running' } satisfies SubagentRow
   expect(color(row, limits({}, 1_000_000))).toBe('red')
   expect(color({ ...row, peak: 1_000, status: 'idle' }, limits({}, 1_000_000))).toBe('cyan')
   await ui.unmount()
@@ -45,9 +45,9 @@ test('a subagent has its row from its start, before its first step; a stop it wa
   const { ui, texts, names, status } = await mounted($, on)
   await $.classic.SubagentStart({ agent_id: 'delta', agent_type: 'Explore' })
   expect(await names()).toEqual(['alpha', 'beta', 'gamma', 'Explore'])
-  expect((await texts()).at(-1)).toMatch(/^● Explore\s+-\s+-\s+0\s/)
+  expect((await texts()).at(-1)).toMatch(/^│ ● │ Explore\s+│\s+-\s+│\s+-\s+│\s+0\s/)
   status.alpha = 'killed'
   await $.classic.SubagentStop(stop('alpha'))
-  expect((await texts())[1]).toMatch(/^✗ alpha/)
+  expect((await texts())[0]).toMatch(/^│ ✗ │ alpha/)
   await ui.unmount()
 })

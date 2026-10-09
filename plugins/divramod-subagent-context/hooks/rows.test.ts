@@ -14,11 +14,11 @@ test('a model id shows as its family', async () => {
   expect(family('glm-4.6')).toBe('glm-4.6')
 })
 
-test('the first step adds a row, the next ones count calls, now, peak and minutes', async () => {
+test('the first step adds a row, the next ones count calls, now, peak and seconds', async () => {
   const one = record([], step(40_000, 0))
   expect(one).toHaveLength(1)
   const two = record(record(one, step(90_000, 60_000)), step(80_000, 150_000))
-  expect(two).toEqual([expect.objectContaining({ id: 'a1', model: 'opus', effort: 'high', calls: 3, now: 80_000, peak: 90_000, minutes: 2.5, compactions: 0 })])
+  expect(two).toEqual([expect.objectContaining({ id: 'a1', model: 'opus', effort: 'high', calls: 3, now: 80_000, peak: 90_000, seconds: 150, compactions: 0 })])
 })
 
 test('a fill that drops by more than half counts as a compaction', async () => {
@@ -31,7 +31,7 @@ test('two agents keep their own rows in the order they started', async () => {
   expect(rows.map(r => [r.id, r.now])).toEqual([['a1', 30_000], ['a2', 20_000]])
 })
 
-const found = (id: string, started: number) => ({ id, description: '', model: 'opus', effort: '', calls: 5, now: 1, peak: 2, compactions: 0, minutes: 1, started, mtime: started, status: 'completed' })
+const found = (id: string, started: number) => ({ id, description: '', model: 'opus', effort: '', calls: 5, now: 1, peak: 2, compactions: 0, seconds: 60, started, mtime: started, status: 'completed' })
 
 test('adopted rows join the live ones in start order and never replace a live row', async () => {
   const live = record([], step(40_000, 100, 'a1'))

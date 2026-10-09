@@ -4,8 +4,9 @@ import type { AgentInfo, EngineInterface, Register, TurnStepInput, TurnUsage } f
 import type { SubagentRow, TableState } from '../types'
 import { LIMIT, type File, idOf, metaOf, rowOf } from './backfill'
 import { adopt, fill, mark, record } from './rows'
-import { type TableProps, isClose, isState } from './grid'
-import { type Limits, WIDTHS, cells, color, foot, head, heads, limits, line, running, values } from './table'
+import { parse, serialize } from './store'
+import { FILTERS, type TableProps, isClose, isState } from './grid'
+import { ALIGNS, type Limits, WIDTHS, cells, color, foot, head, heads, limits, line, running, sums, values } from './table'
 
 const PANE = 'subagent-context'
 const rows = atom({ plugin: 'divramod-subagent-context', key: 'rows' } as const, [] as SubagentRow[])
@@ -27,7 +28,7 @@ async function seen($: EngineInterface, known: Known, l: Limits, e: TurnStepInpu
   const a = await agent($, known, e.agentId!)
   if (!a) return
   const step = { id: a.id, description: a.description, status: 'running', model: usage.model || e.model, effort: e.effort === undefined ? '' : String(e.effort), fill: fill(usage), at: await $.clock.now() }
-  await update($, rows, list => record(list, step))
+  await keep($, await update($, rows, list => record(list, step)))
 }
 
 // The body rows the pane asks for: the tabs, the header, one per subagent and the footer, between 9 and 20. A pane
@@ -46,6 +47,18 @@ async function versionOf($: EngineInterface) {
   return String((() => { try { return JSON.parse(String(text)).version ?? '' } catch { return '' } })())
 }
 
+// Where the rows are kept between sessions, and the last time they were written.
+const storeFile = async ($: EngineInterface) => `${(await $.env.get('CLAUDE_CONFIG_DIR')) || `${await $.env.get('HOME')}/.claude`}/divramod-subagent-context/rows.json`
+let saved = 0
+
+// Writes the rows now, or at most every 5 seconds; a failed write loses nothing the next one will not carry.
+async function keep($: EngineInterface, list: readonly SubagentRow[], force = false) {
+  const now = await $.clock.now()
+  if (!force && now - saved < 5000) return
+  saved = now
+  await $.fs.write(await storeFile($), serialize(list)).catch(() => {})
+}
+
 const list = ($: EngineInterface, dir: string) => $.fs.list(dir).catch(() => [])
 
 // The transcripts of this session's subagents: `<config>/projects/*/<session>/subagents/agent-*.jsonl`, with their dirs.
@@ -60,6 +73,9 @@ async function transcripts($: EngineInterface, config: string, session: string) 
 
 // The subagents that ran before the mod loaded, from their transcripts; a row `turn.step` made already wins.
 async function earlier($: EngineInterface) {
+  // Rows an earlier session left, first: a live row or a transcript of this session wins over them.
+  const left = parse(String(await $.fs.read(await storeFile($)).catch(() => '')), await $.clock.now())
+  if (left.length) await update($, rows, list => adopt(list, left))
   const config = (await $.env.get('CLAUDE_CONFIG_DIR')) || `${await $.env.get('HOME')}/.claude`
   const agents = new Map((await $.agent.list()).map(a => [a.id, a]))
   const found: SubagentRow[] = []
@@ -69,7 +85,7 @@ async function earlier($: EngineInterface) {
     const text = f.size > LIMIT ? undefined : await $.fs.read(`${path}.jsonl`).catch(() => null)
     if (text !== null) found.push(rowOf(f, meta, text, agents.get(f.id)))
   }
-  await update($, rows, list => adopt(list, found))
+  await keep($, await update($, rows, list => adopt(list, found)), true)
 }
 
 export const register: Register = (on, options) => {
@@ -98,7 +114,8 @@ export const register: Register = (on, options) => {
     const a = await agent($, known, e.agent_id)
     const at = await $.clock.now()
     const list = await update($, rows, list => mark(list, { id: e.agent_id, description: a?.description ?? e.agent_type, status: 'running', at }))
-      await room($, list.length).catch(() => {})
+    await keep($, list)
+    await room($, list.length).catch(() => {})
     return result
   })
 
@@ -107,8 +124,8 @@ export const register: Register = (on, options) => {
     const listed = (await $.agent.list()).find(a => a.id === e.agent_id)?.status
     const status = listed === 'failed' || listed === 'killed' ? listed : 'completed'
     const at = await $.clock.now()
-    await update($, rows, list => (list.some(r => r.id === e.agent_id) ? mark(list, { id: e.agent_id, description: e.agent_type, status, at }) : list))
-      return result
+    await keep($, await update($, rows, list => (list.some(r => r.id === e.agent_id) ? mark(list, { id: e.agent_id, description: e.agent_type, status, at }) : list)), true)
+    return result
   })
 
   on('command.run', { command: 'divramod-subagent-context' }, async $ => {
@@ -149,13 +166,17 @@ export const register: Register = (on, options) => {
     const table: TableProps = {
       heads: heads(l),
       widths: WIDTHS,
+      aligns: ALIGNS,
       rows: list.map(row => ({ id: row.id, cells: cells(row, l), values: values(row, l), color: color(row, l) ?? null, running: running(row) })),
+      sums: Object.fromEntries(FILTERS.map(f => [f, sums(list.filter(r => f === 'all' || running(r) === (f === 'running')), l)])) as TableProps['sums'],
       view: await read($, view),
     }
     const version = await versionOf($)
     const room = Math.max(1, (e.viewport?.rows ?? 24) - 5)
+    // The body is as tall as the pane the surface gave it, so the table grows and shrinks with the window.
+    const body = e.props.scroll?.bodyRows
     return (
-      <Box flexDirection="column">
+      <Box flexDirection="column" {...(body ? { height: body } : {})}>
         <Box justifyContent="flex-end">
           <Text dimColor>{version ? `v${version}` : ''}</Text>
         </Box>

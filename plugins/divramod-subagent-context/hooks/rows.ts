@@ -25,7 +25,7 @@ export const record = (rows: readonly SubagentRow[], s: Step): SubagentRow[] => 
     now: s.fill,
     peak: Math.max(was?.peak ?? 0, s.fill),
     compactions: (was?.compactions ?? 0) + (was && s.fill < was.now / 2 ? 1 : 0),
-    minutes: Math.round((s.at - (was?.started ?? s.at)) / 6_000) / 10,
+    seconds: Math.round((s.at - (was?.started ?? s.at)) / 1000),
     started: was?.started ?? s.at,
     mtime: s.at,
     status: s.status,
@@ -41,4 +41,4 @@ export const adopt = (rows: readonly SubagentRow[], found: readonly SubagentRow[
 export const mark = (rows: readonly SubagentRow[], m: { id: string; description: string; status: string; at: number }): SubagentRow[] =>
   rows.some(r => r.id === m.id)
     ? rows.map(r => (r.id === m.id ? { ...r, status: m.status, description: r.description || m.description } : r))
-    : [...rows, { id: m.id, description: m.description, model: '', effort: '', calls: 0, now: 0, peak: 0, compactions: 0, minutes: 0, started: m.at, mtime: m.at, status: m.status }]
+    : [...rows, { id: m.id, description: m.description, model: '', effort: '', calls: 0, now: 0, peak: 0, compactions: 0, seconds: 0, started: m.at, mtime: m.at, status: m.status }]

@@ -24,19 +24,22 @@ See the [repository README](../../README.md) for the requirements.
 
 The pane opens with the session. Reopen it any time with the command `/divramod-subagent-context`.
 
-One row per subagent, filled while it works (no polling), and from the transcripts for subagents that ran before the
-mod loaded:
+A table with a rule over and under it, between its rows and over a sum row. One row per subagent, filled while it
+works (no polling), from the transcripts for subagents that ran before the mod loaded, and from the rows earlier
+sessions left (see Remembered rows):
 
 | Column | Meaning |
 |---|---|
 | (state) | `●` running, `✓` completed, `✗` failed or killed |
-| Subagent | its description |
-| Model, Effort | what it runs on |
-| Calls | model responses so far |
+| Subagent | its description, `Plan 0149 row 232: Automations plugin` shortened to `149-232: Automations plugin` |
+| Model, Effort | what it runs on (centered) |
+| Calls | model responses so far (numbers are right-aligned) |
 | Now, Peak | context in use now, and its highest so far |
 | `%1M` / `%200k` | the peak as a share of the window |
 | Cmp | compactions: its context fell below half of what it was |
-| Min | minutes between its first and latest response |
+| Time | `mm:ss` between its first and latest response |
+
+The last row, `Σ`, adds up the shown rows: their count, calls, context, peaks, the share of the peaks and the time.
 
 Colors: a running row is cyan; a row turns yellow from the warn share of its peak and red from the alert share or
 after a compaction. A transcript over 4 MiB is not read: its counts show `-`.
@@ -44,14 +47,21 @@ after a compaction. A transcript over 4 MiB is not read: its counts show `-`.
 Sort, resize and filter (in the terminal and desktop apps; VS Code and mobile show plain lines):
 
 - **Sort**: click a header: ascending, descending, off.
-- **Resize**: drag a border between two headers.
+- **Resize**: drag any column border, on the header or on any row, left or right. The table is never stretched, and never wider than the pane: the Subagent column gives way.
 - **Filter**: click the tabs All, Running, Finished, or press `a`, `r`, `f`.
 
 - **Close**: press `q` while the pane has the keyboard, or click `close` under the table (Esc hands the keyboard back to the prompt; `ctrl+x x` also closes).
 
-The pane's top right shows the mod's version. It asks for a row per subagent (9 to 20 rows); rows that still do not fit are counted in a last line (`… 3 more above: make the pane taller`). Drag the pane taller to see them.
+The pane's top right shows the mod's version. The table is as tall as the pane, so it grows when you maximize the window and shrinks when you make it smaller again. It asks for a row per subagent (9 to 20 rows); rows that do not fit are counted in a last line (`… 3 more above: make the pane taller`).
 
 Sort, widths and filter stay while the pane redraws or is closed and reopened.
+
+## Remembered rows
+
+A `/clear` starts a new session, so the rows would be gone. The mod writes them to
+`~/.claude/divramod-subagent-context/rows.json` (`$CLAUDE_CONFIG_DIR` if set): at most 300 rows, none older than 14
+days, at most every 5 seconds and at each subagent's end. A new session loads them first; a subagent that was still
+running then shows as finished. Delete the file to forget them.
 
 ## Options
 

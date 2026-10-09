@@ -5,7 +5,9 @@ import type { TableState } from '../types'
 // What the hooks module hands the table: the header labels, the start widths and per row its cells, sort values,
 // color (`null`: the surface's default) and whether it still runs.
 export type TableRow = { id: string; cells: string[]; values: (string | number | null)[]; color: string | null; running: boolean }
-export type TableProps = { heads: string[]; widths: number[]; rows: TableRow[]; view: TableState | null }
+export type Align = 'l' | 'c' | 'r'
+// `sums` is the sum row for each filter; `aligns` the alignment of each column.
+export type TableProps = { heads: string[]; widths: number[]; aligns: Align[]; rows: TableRow[]; sums: Record<Filter, string[]>; view: TableState | null }
 
 export type Sort = { col: number; dir: 'asc' | 'desc' }
 
@@ -40,13 +42,37 @@ export const isState = (data: unknown): data is TableState => {
   )
 }
 
-// The Client's rows: the filter's tabs, the header, then the table's rows.
+// The Client's lines from the top: the filter's tabs, the table's top rule, its header, then a rule and the rows.
 export const TABS_Y = 0
-export const HEAD_Y = 1
+export const TOP_Y = 1
+export const HEAD_Y = 2
 
 export const MIN = 3
 
 export const pad = (s: string, n: number) => (s.length > n ? s.slice(0, Math.max(0, n - 1)) + '…' : s.padEnd(n))
+
+// A cell of `w` cells: a space each side, the text left, centered or right in between, cut with `…` when too long.
+export const inner = (text: string, w: number, align: Align = 'l') => {
+  const room = Math.max(0, w - 2)
+  const t = text.length > room ? text.slice(0, Math.max(0, room - 1)) + '…' : text
+  const gap = room - t.length
+  const [left, right] = align === 'r' ? [gap, 0] : align === 'c' ? [Math.floor(gap / 2), gap - Math.floor(gap / 2)] : [0, gap]
+  return ` ${' '.repeat(left)}${t}${' '.repeat(right)} `.slice(0, w)
+}
+
+// One line of the table: the cells between `│`.
+export const line = (cells: readonly string[], laid: readonly number[], aligns: readonly Align[]) =>
+  '│' + cells.map((c, i) => inner(c, laid[i] ?? c.length + 2, aligns[i])).join('│') + '│'
+
+// A rule across the table: the top, between rows, or the bottom.
+export const rule = (laid: readonly number[], kind: 'top' | 'mid' | 'bottom') => {
+  const [l, m, r] = kind === 'top' ? ['┌', '┬', '┐'] : kind === 'mid' ? ['├', '┼', '┤'] : ['└', '┴', '┘']
+  return l + laid.map(w => '─'.repeat(w)).join(m) + r
+}
+
+// The header: each label with the sort's mark on the sorted one, in its column's alignment.
+export const header = (heads: readonly string[], laid: readonly number[], aligns: readonly Align[], sort: Sort | undefined) =>
+  line(heads.map((label, i) => (sort?.col === i ? `${label} ${sort.dir === 'asc' ? '▲' : '▼'}` : label)), laid, aligns)
 
 // One click on a column's label: asc, then desc, then off; another column starts at asc.
 export const cycle = (sort: Sort | undefined, col: number): Sort | undefined =>
@@ -84,29 +110,34 @@ const tabAt = (labels: readonly string[], x: number) => {
   return undefined
 }
 
-// The widths laid out in `columns` cells: the last column takes the rest, at least MIN; unmeasured (0) keeps them.
+// The table's width: a border before each column and one after the last.
+export const widthOf = (widths: readonly number[]) => widths.reduce((sum, w) => sum + w + 1, 1)
+
+// The widths laid out in `columns` cells: too wide, the Subagent column gives way, down to MIN; never stretched.
 export const fit = (widths: readonly number[], columns: number) => {
-  if (!columns) return [...widths]
-  const used = widths.slice(0, -1).reduce((sum, w) => sum + w + 1, 0)
-  return [...widths.slice(0, -1), Math.max(MIN, columns - used)]
+  const laid = [...widths]
+  if (columns && laid.length > 1) laid[1] = Math.max(MIN, laid[1]! - Math.max(0, widthOf(laid) - columns))
+  return laid
 }
 
-// What cell `x` of the header is: a column's label, or the border right of it (the last column has none).
+// What cell `x` of a line is: a column's cell, or the border right of it (`border`); the left edge is nobody's.
 export const hit = (widths: readonly number[], x: number) => {
-  let start = 0
+  let edge = 0
   for (const [col, w] of widths.entries()) {
-    if (x >= start && x < start + w) return { col, border: false }
-    if (x === start + w && col < widths.length - 1) return { col, border: true }
-    start += w + 1
+    if (x > edge && x < edge + w + 1) return { col, border: false }
+    if (x === edge + w + 1) return { col, border: true }
+    edge += w + 1
   }
   return undefined
 }
 
-// What a cell of the top rows is: a tab (`f:<filter>`), a column's label (`h:<col>`) or the border right of it (`b:<col>`).
+// What a cell is: a tab (`f:<filter>`), a column's label in the header (`h:<col>`), or a border right of a column on
+// any line of the table (`b:<col>`).
 const target = (e: ClientPointerEvent, laid: readonly number[], labels: readonly string[]) => {
   if (e.y === TABS_Y) return tabAt(labels, e.x) && `f:${tabAt(labels, e.x)}`
-  const at = e.y === HEAD_Y ? hit(laid, e.x) : undefined
-  return at && `${at.border ? 'b' : 'h'}:${at.col}`
+  const at = e.y >= TOP_Y ? hit(laid, e.x) : undefined
+  if (!at) return undefined
+  return at.border ? `b:${at.col}` : e.y === HEAD_Y ? `h:${at.col}` : undefined
 }
 
 // The view after one pointer event: a press on a border drags it, a press and release on one label sorts by it,
@@ -137,15 +168,10 @@ export const key = (view: View, k: string): View => {
   return filter && filter !== (view.filter ?? 'all') ? { ...view, filter } : view
 }
 
-// The header's labels in their widths, `│` between them, the sorted one marked ▲ or ▼.
-export const header = (heads: readonly string[], laid: readonly number[], sort: Sort | undefined) =>
-  heads
-    .map((label, i) => {
-      const w = laid[i] ?? label.length
-      const mark = sort?.dir === 'asc' ? '▲' : '▼'
-      return sort?.col !== i ? pad(label, w) : w < 3 ? pad(mark, w) : pad(label, w - 2) + ' ' + mark
-    })
-    .join('│')
-
-export const row = (cells: readonly string[], laid: readonly number[]) =>
-  cells.map((cell, i) => pad(cell, laid[i] ?? cell.length)).join(' ')
+// How many rows fit in `lines` lines: the tabs, the top rule, the header, a rule, the rows with a rule between each,
+// a rule, the sum row and the bottom rule; a last line counts those left out.
+export const fits = (rows: number, lines: number) => {
+  if (!lines) return rows
+  const all = Math.floor((lines - 6) / 2)
+  return rows <= all ? rows : Math.max(1, Math.floor((lines - 7) / 2))
+}

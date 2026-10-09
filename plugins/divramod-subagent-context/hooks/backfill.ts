@@ -24,8 +24,8 @@ export const metaOf = (text: string | undefined): Meta => {
 // The row of a transcript that ran before the mod loaded; `text` is absent for one over LIMIT (not read).
 export function rowOf(file: File, meta: Meta, text: string | undefined, agent?: AgentInfo): SubagentRow {
   const base = { id: file.id, description: meta.description || agent?.description || '', effort: meta.effort ?? '', mtime: file.mtimeMs, status: agent?.status ?? 'completed' }
-  if (text === undefined) return { ...base, model: family(meta.model ?? ''), calls: 0, now: 0, peak: 0, compactions: 0, minutes: 0, started: file.mtimeMs, large: true }
+  if (text === undefined) return { ...base, model: family(meta.model ?? ''), calls: 0, now: 0, peak: 0, compactions: 0, seconds: 0, started: file.mtimeMs, large: true }
   const f = fold(text)
   const started = f.first || file.mtimeMs
-  return { ...base, model: modelOf(f, meta), calls: f.calls, now: f.now, peak: f.peak, compactions: f.compactions, minutes: Math.round((f.last - started) / 6_000) / 10, started }
+  return { ...base, model: modelOf(f, meta), calls: f.calls, now: f.now, peak: f.peak, compactions: f.compactions, seconds: Math.round((f.last - started) / 1000), started }
 }
