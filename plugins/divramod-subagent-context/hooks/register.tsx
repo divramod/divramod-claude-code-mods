@@ -112,7 +112,7 @@ export const register: Register = (on, options) => {
   // The table is a `Client` where the surface draws one (terminal, desktop); elsewhere its rows as plain lines.
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const el = $.ui.resolve(e)
-    const { Box, Text } = el
+    const { Box, Text, Button } = el
     // VS Code's table names a Client it does not draw yet: the surface decides.
     const Client = 'Client' in el && (e.surface === 'terminal' || e.surface === 'desktop') ? el.Client : undefined
     const list = await read($, rows)
@@ -134,7 +134,11 @@ export const register: Register = (on, options) => {
             {list.slice(-room).map(row => <Text color={color(row, l)}>{line(row, l)}</Text>)}
           </Box>
         )}
-        <Text dimColor>{`${foot(l)} · live`}</Text>
+        <Box>
+          <Text dimColor>{`${foot(l)} · live · `}</Text>
+          {/* The pane's own key: it works while the pane holds the keyboard, without a click into the table. */}
+          <Button label="close" hotkey="q" plain onPress={() => $.ui.close({ id: PANE })} />
+        </Box>
       </Box>
     )
   })

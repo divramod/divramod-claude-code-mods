@@ -22,3 +22,15 @@ test('only a close request is a close', () => {
   expect(isClose({ close: 1 })).toBe(false)
   expect(isClose(null)).toBe(false)
 })
+
+test('the close button has the hotkey q and closes the pane when pressed', async ($, on) => {
+  const closed: string[] = []
+  on('ui.close', (_$, e) => {
+    closed.push(e.id)
+    return { value: undefined }
+  })
+  const { ui } = await mounted($, on)
+  expect((await ui.find({ type: 'Button', key: 'close' }))?.props.hotkey).toBe('q')
+  await ui.press({ key: 'close' })
+  expect(closed).toEqual(['subagent-context'])
+})

@@ -41,7 +41,7 @@ Sort, resize and filter (in the terminal and desktop apps; VS Code and mobile sh
 - **Resize**: drag a border between two headers.
 - **Filter**: click the tabs All, Running, Finished, or press `a`, `r`, `f`.
 
-- **Close**: press `q` while the table has the keyboard (Esc hands the keyboard back to the prompt; `ctrl+x x` also closes).
+- **Close**: press `q` while the pane has the keyboard, or click `close` under the table (Esc hands the keyboard back to the prompt; `ctrl+x x` also closes).
 
 Sort, widths and filter stay while the pane redraws or is closed and reopened.
 
