@@ -29,7 +29,7 @@ mod loaded:
 | Calls | model responses so far |
 | Now, Peak | context in use now, and its highest so far |
 | `%1M` / `%200k` | the peak as a share of the window |
-| Cmp | compactions: its context dropped by half or more |
+| Cmp | compactions: its context fell below half of what it was |
 | Min | minutes between its first and latest response |
 
 Colors: a running row is cyan; a row turns yellow from the warn share of its peak and red from the alert share or
