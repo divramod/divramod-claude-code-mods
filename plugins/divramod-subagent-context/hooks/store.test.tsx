@@ -26,11 +26,12 @@ test('a new session starts with the rows an earlier one left, and writes its own
   on('command.register', () => ({ value: undefined as never }))
   on('ui.open', () => ({ value: undefined as never }))
   on('session.id', () => ({ value: 'S2' }))
+  on('session.cwd', () => ({ value: '/w/worktree/hal2/02' }))
   on('agent.list', () => ({ value: [{ id: 'live', description: 'Plan 0149 row 300: now', type: 'general-purpose', status: 'running' }] }))
   on('fs.list', () => ({ value: [] }))
   on('classic.SubagentStart', () => ({}))
   on('classic.SubagentStop', () => ({}))
-  const file = '/h/.claude/divramod-subagent-context/rows.json'
+  const file = '/h/.claude/divramod-subagent-context/rows-w-worktree-hal2-02.json'
   const written: Record<string, string> = {}
   on('fs.read', (_$, e) => {
     if (e.path === file) return { value: serialize([row('232', { mtime: 0, started: 0 })]) }
@@ -49,4 +50,32 @@ test('a new session starts with the rows an earlier one left, and writes its own
   await $.classic.SubagentStop({ agent_id: 'live', agent_type: 'general-purpose', agent_transcript_path: '', stop_hook_active: false })
   const saved = parse(written[file]!, 0).map(r => r.id)
   expect(saved).toEqual(expect.arrayContaining(['232', 'live']))
+})
+
+test("another folder's session neither reads nor overwrites a folder's rows", async ($, on) => {
+  const clock = mock.clock(on)
+  mock.env(on, { HOME: '/h' })
+  on('session.start', (_$, e) => ({ cwd: e.cwd }))
+  on('session.usage', () => ({ value: { context: { window: 1_000_000 } } as never }))
+  on('command.register', () => ({ value: undefined as never }))
+  on('ui.open', () => ({ value: undefined as never }))
+  on('session.id', () => ({ value: 'S3' }))
+  on('session.cwd', () => ({ value: '/w/worktree/hal2/03' }))
+  on('agent.list', () => ({ value: [] }))
+  on('fs.list', () => ({ value: [] }))
+  const read: string[] = []
+  const written: string[] = []
+  on('fs.read', (_$, e) => {
+    read.push(e.path)
+    throw new Error(`ENOENT ${e.path}`)
+  })
+  on('fs.write', (_$, e) => {
+    written.push(e.path)
+    return { value: undefined as never }
+  })
+  await $.session.start({ cwd: '/w', surface: 'terminal', isInteractive: true })
+  await clock.settle()
+  expect(read).toContain('/h/.claude/divramod-subagent-context/rows-w-worktree-hal2-03.json')
+  expect(read.filter(p => p.includes('rows-w-worktree-hal2-02'))).toEqual([])
+  expect(written).toEqual(['/h/.claude/divramod-subagent-context/rows-w-worktree-hal2-03.json'])
 })

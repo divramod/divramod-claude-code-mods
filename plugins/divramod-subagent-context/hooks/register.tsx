@@ -105,7 +105,11 @@ async function versionOf($: EngineInterface) {
 }
 
 // Where the rows are kept between sessions, and the last time they were written.
-const storeFile = async ($: EngineInterface) => `${(await $.env.get('CLAUDE_CONFIG_DIR')) || `${await $.env.get('HOME')}/.claude`}/divramod-subagent-context/rows.json`
+// One file per working folder: a `/clear` keeps the folder, and sessions of other folders never overwrite it.
+const storeFile = async ($: EngineInterface) => {
+  const slug = (await $.session.cwd().catch(() => '')).replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'default'
+  return `${await configDir($)}/divramod-subagent-context/rows-${slug}.json`
+}
 let saved = 0
 
 // Writes the rows now, or at most every 5 seconds; a failed write loses nothing the next one will not carry.

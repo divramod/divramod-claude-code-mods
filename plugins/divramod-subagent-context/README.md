@@ -69,7 +69,7 @@ else its folder's.
 ## Remembered rows
 
 A `/clear` starts a new session, so the rows would be gone. The mod writes them to
-`~/.claude/divramod-subagent-context/rows.json` (`$CLAUDE_CONFIG_DIR` if set): at most 300 rows, none older than 14
+`~/.claude/divramod-subagent-context/rows-<folder>.json` (one file per working folder, so sessions in other folders never overwrite it) (`$CLAUDE_CONFIG_DIR` if set): at most 300 rows, none older than 14
 days, at most every 5 seconds and at each subagent's end. A new session loads them first; a subagent that was still
 running then shows as finished. Delete the file to forget them.
 
