@@ -4,7 +4,7 @@ import type { AgentInfo, EngineInterface, Register, TurnStepInput, TurnUsage } f
 import type { SessionRow, SubagentRow, TableState, Tab } from '../types'
 import { LIMIT, type File, idOf, metaOf, rowOf } from './backfill'
 import { adopt, fill, mark, record } from './rows'
-import { parse, serialize } from './store'
+import { DAYS, parse, serialize } from './store'
 import { agentsGrid, asTable, lines as gridLines, ordered, parse as parseSession, plansGrid, planOf } from './sessions'
 import { FILTERS, type Filter, type TableProps, type TableRow, isClose, isState, order, tabOf, shown, step } from './grid'
 import { ALIGNS, type Limits, WIDTHS, cells, color, foot, head, heads, limits, line, running, sums, values } from './table'
@@ -102,6 +102,7 @@ async function agent($: EngineInterface, known: Known, id: string) {
 async function seen($: EngineInterface, known: Known, l: Limits, e: TurnStepInput, usage: TurnUsage) {
   const a = await agent($, known, e.agentId!)
   if (!a) return
+  live.add(a.id)
   const step = { id: a.id, description: a.description, status: 'running', model: usage.model || e.model, effort: e.effort === undefined ? '' : String(e.effort), fill: fill(usage), at: await $.clock.now() }
   await keep($, await update($, rows, list => record(list, step)))
 }
@@ -139,6 +140,28 @@ async function keep($: EngineInterface, list: readonly SubagentRow[], force = fa
 }
 
 const list = ($: EngineInterface, dir: string) => $.fs.list(dir).catch(() => [])
+
+// The rows this module instance made from events (its own session's subagents), which a purge never drops.
+const live = new Set<string>()
+let purged = false
+
+// Once per load: drops the remembered rows whose subagent has no transcript in this folder's project (rows another
+// folder's session left in a shared file or in the state `/reload-plugins` keeps). With no transcript to judge by it keeps all.
+async function purge($: EngineInterface) {
+  if (purged) return
+  purged = true
+  try {
+    const dir = `${await configDir($)}/projects/${(await $.session.cwd()).replace(/[^A-Za-z0-9]/g, '-')}`
+    const now = await $.clock.now()
+    const mine = new Set<string>()
+    for (const s of await list($, dir)) {
+      if (s.kind !== 'dir' || now - s.mtimeMs > DAYS * 86_400_000) continue
+      for (const f of await list($, `${dir}/${s.name}/subagents`)) if (idOf(f.name)) mine.add(idOf(f.name)!)
+    }
+    if (!mine.size) return
+    await keep($, await update($, rows, all => all.filter(r => mine.has(r.id) || live.has(r.id))), true)
+  } catch {}
+}
 
 // The transcripts of this session's subagents: `<config>/projects/*/<session>/subagents/agent-*.jsonl`, with their dirs.
 async function transcripts($: EngineInterface, config: string, session: string) {
@@ -178,7 +201,7 @@ export const register: Register = (on, options) => {
     // A module older than 0.1.7 pinned a summary line under the prompt; clearing it is harmless when none is set.
     void $.ui.status(undefined)
     void $.ui.open({ id: PANE, title: 'divramod subagents context', rows: wanted(0) })
-    void earlier($).catch(() => {})
+    void earlier($).then(() => purge($)).catch(() => {})
     void refresh($)
     void $.clock.every(10_000, () => refresh($))
     return started
@@ -195,6 +218,7 @@ export const register: Register = (on, options) => {
   on('classic.SubagentStart', async ($, e, next) => {
     const result = await next(e)
     const a = await agent($, known, e.agent_id)
+    live.add(e.agent_id)
     const at = await $.clock.now()
     const list = await update($, rows, list => mark(list, { id: e.agent_id, description: a?.description ?? e.agent_type, status: 'running', at }))
     await keep($, list)
@@ -252,6 +276,7 @@ export const register: Register = (on, options) => {
     const { Box, Text, Button } = el
     // VS Code's table names a Client it does not draw yet: the surface decides.
     const Client = 'Client' in el && (e.surface === 'terminal' || e.surface === 'desktop') ? el.Client : undefined
+    void purge($)
     const list = await read($, rows)
     const table: TableProps = {
       heads: heads(l),
