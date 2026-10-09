@@ -32,6 +32,12 @@ export const saved = (view: View): TableState => ({ sort: view.sort ?? null, wid
 // What the Client posts when `q` is pressed.
 export const isClose = (data: unknown) => typeof data === 'object' && data !== null && (data as { close?: unknown }).close === true
 
+// What the Client posts when `s` `p` or `a` is pressed: the tab the pane should show.
+export const tabOf = (data: unknown) => {
+  const t = (data as { tab?: unknown } | null)?.tab
+  return t === 'subagents' || t === 'plans' || t === 'agents' ? t : undefined
+}
+
 export const isState = (data: unknown): data is TableState => {
   const d = data as TableState | null
   return (

@@ -34,3 +34,16 @@ test('the close button has the hotkey q and closes the pane when pressed', async
   await ui.press({ key: 'close' })
   expect(closed).toEqual(['subagent-context'])
 })
+
+test('s, p and a pressed in the table switch the pane\'s tab, as the buttons do', async ($, on) => {
+  on('session.id', () => ({ value: 'S' }))
+  on('fs.list', () => ({ value: [] }))
+  const { ui } = await mounted($, on)
+  await ui.key({ key: 'p', in: 'table' })
+  expect(await ui.find({ type: 'Text', text: /sessions · reloaded/, in: 'plans-table' })).toBeDefined()
+  await ui.key({ key: 'a', in: 'plans-table' })
+  expect(await ui.find({ type: 'Text', text: /sessions · reloaded/, in: 'agents-table' })).toBeDefined()
+  await ui.key({ key: 's', in: 'agents-table' })
+  expect(await ui.find({ type: 'Text', text: / All \d /, in: 'table' })).toBeDefined()
+  await ui.unmount()
+})

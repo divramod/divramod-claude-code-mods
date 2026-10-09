@@ -6,7 +6,7 @@ import { LIMIT, type File, idOf, metaOf, rowOf } from './backfill'
 import { adopt, fill, mark, record } from './rows'
 import { parse, serialize } from './store'
 import { agentsGrid, asTable, lines as gridLines, ordered, parse as parseSession, plansGrid, planOf } from './sessions'
-import { FILTERS, type Filter, type TableProps, type TableRow, isClose, isState, order, shown, step } from './grid'
+import { FILTERS, type Filter, type TableProps, type TableRow, isClose, isState, order, tabOf, shown, step } from './grid'
 import { ALIGNS, type Limits, WIDTHS, cells, color, foot, head, heads, limits, line, running, sums, values } from './table'
 
 const PANE = 'subagent-context'
@@ -221,6 +221,7 @@ export const register: Register = (on, options) => {
     const result = await next(e)
     if (e.requestId !== PANE) return result
     if (isClose(e.data)) await $.ui.close({ id: PANE })
+    else if (tabOf(e.data)) await show($, tabOf(e.data)!)
     else if (isState(e.data)) {
       const state = e.data as TableState
       if (e.element === 'table') await update($, view, () => state)
