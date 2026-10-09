@@ -136,6 +136,11 @@ test('s, p and a switch between the subagents, the plans of the live sessions an
   await ui.resize({ columns: 120, rows: 20, in: 'plans-table' })
   expect(await ui.find({ type: 'Button', key: 'agents' })).toBeDefined()
   expect(await ui.find({ type: 'Button', key: 'subagents' })).toBeDefined()
+  await ui.press({ key: 'down' })
+  const lit = async () => (await ui.findAll({ type: 'Text', in: 'plans-table' })).filter(t => t.props.inverse && t.text.startsWith('│')).map(t => t.text)
+  expect(await lit()).toHaveLength(1)
+  await ui.press({ key: 'up' })
+  expect((await lit())[0]).toContain('hal2-03')
   await ui.press({ key: 'agents' })
   current = 'agents-table'
   expect((await texts()).some(t => t.includes('hal2-04'))).toBe(true)

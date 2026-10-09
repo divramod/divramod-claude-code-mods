@@ -30,6 +30,21 @@ async function press($: EngineInterface, l: Limits, key: string) {
   await update($, view, () => ({ sort: next.sort, widths: next.widths, filter: next.filter, cursor: next.cursor ?? null }))
   await update($, epoch, n => n + 1)
 }
+// `j` `k` on the plans or agents tab: the row cursor of that table, so the keys never fall through to the prompt.
+async function pressSessions($: EngineInterface, key: string, which: 'plans' | 'agents') {
+  const kept = which === 'plans' ? await read($, plansView) : await read($, agentsView)
+  const found = await read($, sessions)
+  const grid = which === 'plans' ? plansGrid(found, 0) : agentsGrid(found, 0)
+  const rows = grid.cells.map((cells, i) => ({ id: grid.ids[i]!, cells, values: cells, color: null, running: false }))
+  const state = { sort: kept?.sort ?? null, widths: kept?.widths ?? asTable(grid, '', null, grid.ids, 0).widths, filter: 'all' as Filter, cursor: kept?.cursor ?? undefined }
+  const next = step(state, key, order(rows, state.sort ?? undefined).map(r => r.id))
+  if (next.cursor === state.cursor) return
+  const saved = { sort: state.sort, widths: state.widths, filter: 'all' as Filter, cursor: next.cursor ?? null }
+  if (which === 'plans') await update($, plansView, () => saved)
+  else await update($, agentsView, () => saved)
+  await update($, epoch, n => n + 1)
+}
+
 // The pane's top-level tab and the sessions of this machine the Plans and Agents tabs list (reloaded every 10 seconds).
 const tab = atom({ plugin: 'divramod-subagent-context', key: 'tab' } as const, 'subagents' as Tab)
 const sessions = atom({ plugin: 'divramod-subagent-context', key: 'sessions' } as const, [] as SessionRow[])
@@ -253,7 +268,7 @@ export const register: Register = (on, options) => {
     const now = current === 'subagents' ? 0 : await $.clock.now()
     const grid = current === 'plans' ? plansGrid(found, now) : agentsGrid(found, now)
     const empty = current === 'plans' ? 'No session has a current plan.' : 'No Claude sessions found.'
-    const sessionTable = asTable(grid, `${grid.cells.length} sessions · reloaded every 10 s · ● this session`, (current === 'plans' ? await read($, plansView) : await read($, agentsView)), grid.ids, current === 'plans' ? 0 : 3)
+    const sessionTable: TableProps = { ...asTable(grid, `${grid.cells.length} sessions · reloaded every 10 s · ● this session`, (current === 'plans' ? await read($, plansView) : await read($, agentsView)), grid.ids, current === 'plans' ? 0 : 3), epoch: await read($, epoch) }
     const room = Math.max(1, (e.viewport?.rows ?? 24) - 5)
     // The body is as tall as the pane the surface gave it, so the table grows and shrinks with the window.
     const body = e.props.scroll?.bodyRows
@@ -302,7 +317,12 @@ export const register: Register = (on, options) => {
               </Box>
             )}
             <Text dimColor>{`${ordered(found, current === 'plans').length} sessions · reloaded every 10 s · ● this session`}</Text>
-            <Button label="close" hotkey="q" plain onPress={() => $.ui.close({ id: PANE })} />
+            <Box gap={1}>
+              <Button label="down" hotkey="j" plain onPress={() => pressSessions($, 'j', current)} />
+              <Button label="up" hotkey="k" plain onPress={() => pressSessions($, 'k', current)} />
+              <Text dimColor>·</Text>
+              <Button label="close" hotkey="q" plain onPress={() => $.ui.close({ id: PANE })} />
+            </Box>
           </>
         )}
       </Box>
