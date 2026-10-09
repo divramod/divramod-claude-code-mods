@@ -17,8 +17,15 @@ export type SubagentRow = {
   large?: boolean
 }
 
+// The table's sort, column widths and filter, as its Client last posted them; kept for the session.
+export type TableState = {
+  sort: { col: number; dir: 'asc' | 'desc' } | null
+  widths: number[]
+  filter: 'all' | 'running' | 'finished'
+}
+
 declare module 'claude-code' {
   interface PluginState {
-    'divramod-subagent-context': { rows: SubagentRow[] }
+    'divramod-subagent-context': { rows: SubagentRow[]; view: TableState | null }
   }
 }

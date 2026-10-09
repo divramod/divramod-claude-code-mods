@@ -1,14 +1,16 @@
 import { atom, read, update } from 'claude-code'
 import type { AgentInfo, EngineInterface, Register, TurnStepInput, TurnUsage } from 'claude-code'
 
-import type { SubagentRow } from '../types'
+import type { SubagentRow, TableState } from '../types'
 import { LIMIT, type File, idOf, metaOf, rowOf } from './backfill'
 import { adopt, fill, mark, record } from './rows'
-import type { TableProps } from './grid'
+import { type TableProps, isState } from './grid'
 import { type Limits, WIDTHS, cells, color, foot, head, heads, limits, line, running, share, tone, values } from './table'
 
 const PANE = 'subagent-context'
 const rows = atom({ plugin: 'divramod-subagent-context', key: 'rows' } as const, [] as SubagentRow[])
+// The table's sort, widths and filter, so a redraw or a reopened pane shows them as they were (view-state rule).
+const view = atom({ plugin: 'divramod-subagent-context', key: 'view' } as const, null as TableState | null)
 
 // The agents `$.agent.list()` named, and the loop ids it does not (the engine's compaction and memory forks).
 type Known = { agents: Map<string, AgentInfo>; unlisted: Set<string> }
@@ -100,6 +102,12 @@ export const register: Register = (on, options) => {
     return { text: 'Subagents pane opened.' }
   })
 
+  on('ui.message', async ($, e, next) => {
+    const result = await next(e)
+    if (e.requestId === PANE && e.element === 'table' && isState(e.data)) await update($, view, () => e.data as TableState)
+    return result
+  })
+
   // The table is a `Client` where the surface draws one (terminal, desktop); elsewhere its rows as plain lines.
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const el = $.ui.resolve(e)
@@ -111,6 +119,7 @@ export const register: Register = (on, options) => {
       heads: heads(l),
       widths: WIDTHS,
       rows: list.map(row => ({ id: row.id, cells: cells(row, l), values: values(row, l), color: color(row, l) ?? null, running: running(row) })),
+      view: await read($, view),
     }
     const room = Math.max(1, (e.viewport?.rows ?? 24) - 4)
     return (

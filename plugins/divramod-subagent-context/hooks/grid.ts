@@ -1,9 +1,11 @@
 import type { ClientPointerEvent } from 'claude-code'
 
+import type { TableState } from '../types'
+
 // What the hooks module hands the table: the header labels, the start widths and per row its cells, sort values,
 // color (`null`: the surface's default) and whether it still runs.
 export type TableRow = { id: string; cells: string[]; values: (string | number | null)[]; color: string | null; running: boolean }
-export type TableProps = { heads: string[]; widths: number[]; rows: TableRow[] }
+export type TableProps = { heads: string[]; widths: number[]; rows: TableRow[]; view: TableState | null }
 
 export type Sort = { col: number; dir: 'asc' | 'desc' }
 
@@ -12,6 +14,28 @@ export type Filter = (typeof FILTERS)[number]
 
 // The table's own state: the sort, the widths, the filter, a border being dragged and what a button went down on.
 export type View = { sort?: Sort; widths: number[]; filter?: Filter; drag?: { col: number; from: number; width: number }; press?: string }
+
+// What a new instance starts from: the kept state, its widths only while the columns are the same.
+export const restore = (props: TableProps): View => {
+  const kept = props.view
+  if (!kept) return { widths: props.widths }
+  const widths = kept.widths.length === props.widths.length ? kept.widths : props.widths
+  return { widths, filter: kept.filter, ...(kept.sort ? { sort: kept.sort } : {}) }
+}
+
+// What is kept of a view: not a drag or a press under way.
+export const saved = (view: View): TableState => ({ sort: view.sort ?? null, widths: view.widths, filter: view.filter ?? 'all' })
+
+// A post's data is the Client's own, but crosses as `unknown`: only a whole TableState is kept.
+export const isState = (data: unknown): data is TableState => {
+  const d = data as TableState | null
+  return (
+    typeof d === 'object' && d !== null &&
+    Array.isArray(d.widths) && d.widths.every(w => Number.isInteger(w) && w > 0) &&
+    (FILTERS as readonly string[]).includes(d.filter) &&
+    (d.sort === null || (typeof d.sort === 'object' && Number.isInteger(d.sort.col) && (d.sort.dir === 'asc' || d.sort.dir === 'desc')))
+  )
+}
 
 // The Client's rows: the filter's tabs, the header, then the table's rows.
 export const TABS_Y = 0
