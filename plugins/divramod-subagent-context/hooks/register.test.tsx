@@ -37,7 +37,7 @@ test('the thresholds come from the options', async () => {
 test('the pane counts against the window and thresholds the options set', { options: { window: '200k', warn_percent: 10, alert_percent: 50 } }, async $ => {
   const ui = await $.ui.mount(PANE)
   expect(await ui.find({ type: 'Text', text: /warn 10% · stop 50% of 200k/ })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /%200k/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /%200k/, in: 'table' })).toBeDefined()
   await ui.unmount()
 })
 
@@ -74,10 +74,10 @@ test('a stubbed step stream fills the rows and colors them by their share', asyn
   }
   for (const [tokens, id] of [[40_000, 'a1'], [360_000, 'a2'], [500_000, 'fork'], [310_000, 'a1']] as const) await run(tokens, id)
   expect((await run(700_000)).stopReason).toBe('end_turn')
-  const step30 = await ui.find({ type: 'Text', text: /step 30\s+opus\s+high\s+2\s+310k\s+310k\s+31\.0/ })
+  const step30 = await ui.find({ type: 'Text', text: /step 30\s+opus\s+high\s+2\s+310k\s+310k\s+31\.0/, in: 'table' })
   expect(step30?.props.color).toBe('yellow')
-  expect((await ui.find({ type: 'Text', text: /Explore the hooks/ }))?.props.color).toBe('red')
-  expect(await ui.find({ type: 'Text', text: /500k|700k/ })).toBeUndefined()
+  expect((await ui.find({ type: 'Text', text: /Explore the hooks/, in: 'table' }))?.props.color).toBe('red')
+  expect(await ui.find({ type: 'Text', text: /500k|700k/, in: 'table' })).toBeUndefined()
   expect(status).toEqual(['subagent at 36% context', 'subagent at 31% context'])
   await ui.unmount()
 })
@@ -112,8 +112,8 @@ test('at the start the pane lists the subagents that ran before the mod loaded',
   await $.session.start({ cwd: '/w', surface: 'terminal', isInteractive: true })
   await clock.settle()
   const ui = await $.ui.mount(PANE)
-  const old = await ui.find({ type: 'Text', text: /Old one\s+sonnet\s+high\s+2\s+120k\s+120k/ })
+  const old = await ui.find({ type: 'Text', text: /Old one\s+sonnet\s+high\s+2\s+120k\s+120k/, in: 'table' })
   expect(old).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /agent-big|big\s+-\s+-\s+-/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /agent-big|big\s+-\s+-\s+-/, in: 'table' })).toBeDefined()
   await ui.unmount()
 })

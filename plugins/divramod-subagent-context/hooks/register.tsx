@@ -4,7 +4,8 @@ import type { AgentInfo, EngineInterface, Register, TurnStepInput, TurnUsage } f
 import type { SubagentRow } from '../types'
 import { LIMIT, type File, idOf, metaOf, rowOf } from './backfill'
 import { adopt, fill, record } from './rows'
-import { type Limits, foot, head, limits, line, share, tone } from './table'
+import type { TableProps } from './grid'
+import { type Limits, WIDTHS, cells, foot, head, heads, limits, line, share, tone, values } from './table'
 
 const PANE = 'subagent-context'
 const rows = atom({ plugin: 'divramod-subagent-context', key: 'rows' } as const, [] as SubagentRow[])
@@ -81,19 +82,30 @@ export const register: Register = (on, options) => {
     return { text: 'Subagents pane opened.' }
   })
 
+  // The table is a `Client` where the surface draws one (terminal, desktop); elsewhere its rows as plain lines.
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
-    const { Box, Text } = $.ui.resolve(e)
+    const el = $.ui.resolve(e)
+    const { Box, Text } = el
+    // VS Code's table names a Client it does not draw yet: the surface decides.
+    const Client = 'Client' in el && (e.surface === 'terminal' || e.surface === 'desktop') ? el.Client : undefined
     const list = await read($, rows)
+    const table: TableProps = {
+      heads: heads(l),
+      widths: WIDTHS,
+      rows: list.map(row => ({ id: row.id, cells: cells(row, l), values: values(row, l), color: tone(row, l) ?? null })),
+    }
     const room = Math.max(1, (e.viewport?.rows ?? 24) - 4)
     return (
       <Box flexDirection="column">
-        <Text bold>{head(l)}</Text>
-        {list.length === 0 && <Text dimColor>No subagents yet.</Text>}
-        {list.slice(-room).map(row => (
-          <Text color={tone(row, l)}>
-            {line(row, l)}
-          </Text>
-        ))}
+        {Client ? (
+          <Client key="table" module="./table-view.tsx" props={table} flexGrow={1} />
+        ) : (
+          <Box flexDirection="column">
+            <Text bold>{head(l)}</Text>
+            {list.length === 0 && <Text dimColor>No subagents yet.</Text>}
+            {list.slice(-room).map(row => <Text color={tone(row, l)}>{line(row, l)}</Text>)}
+          </Box>
+        )}
         <Text dimColor>{`${foot(l)} · live`}</Text>
       </Box>
     )

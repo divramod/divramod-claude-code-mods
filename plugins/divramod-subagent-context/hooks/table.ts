@@ -23,15 +23,29 @@ export const share = (row: SubagentRow, l: Limits) => row.peak / l.window
 export const tone = (row: SubagentRow, l: Limits): 'red' | 'yellow' | undefined =>
   share(row, l) >= l.alert || row.compactions > 0 ? 'red' : share(row, l) >= l.warn ? 'yellow' : undefined
 
-export const head = (l: Limits) =>
-  `${pad('Subagent', 36)} ${pad('Model', 7)} ${pad('Effort', 7)} ${pad('Calls', 5)} ${pad('Now', 6)} ${pad('Peak', 6)} ${pad(`%${label(l.window)}`, 5)} ${pad('Cmp', 3)} Min`
+// The table's columns and their start widths; the last one takes the rest of the room.
+export const WIDTHS = [36, 7, 7, 5, 6, 6, 5, 3, 4]
+
+export const heads = (l: Limits) => ['Subagent', 'Model', 'Effort', 'Calls', 'Now', 'Peak', `%${label(l.window)}`, 'Cmp', 'Min']
 
 // A row whose transcript was too large to read shows `-` where it has no counts.
-export const line = (row: SubagentRow, l: Limits) => {
-  const [calls, now, peak, pct, cmp] = row.large
-    ? ['-', '-', '-', '-', '-']
-    : [String(row.calls), k(row.now), k(row.peak), (share(row, l) * 100).toFixed(1), String(row.compactions)]
-  return `${pad(row.description || row.id, 36)} ${pad(row.model || '-', 7)} ${pad(row.effort || '-', 7)} ${pad(calls, 5)} ${pad(now, 6)} ${pad(peak, 6)} ${pad(pct, 5)} ${pad(cmp, 3)} ${row.large ? '-' : row.minutes}`
+export const cells = (row: SubagentRow, l: Limits) => {
+  const [calls, now, peak, pct, cmp, min] = row.large
+    ? ['-', '-', '-', '-', '-', '-']
+    : [String(row.calls), k(row.now), k(row.peak), (share(row, l) * 100).toFixed(1), String(row.compactions), String(row.minutes)]
+  return [row.description || row.id, row.model || '-', row.effort || '-', calls, now, peak, pct, cmp, min]
 }
+
+// What a column sorts by: text, or a number; `null` (a large row's counts) sorts last either way.
+export const values = (row: SubagentRow, l: Limits): (string | number | null)[] => {
+  const n = (v: number) => (row.large ? null : v)
+  return [row.description || row.id, row.model, row.effort, n(row.calls), n(row.now), n(row.peak), n(share(row, l)), n(row.compactions), n(row.minutes)]
+}
+
+const join = (texts: string[]) => texts.map((t, i) => (i === texts.length - 1 ? t : pad(t, WIDTHS[i]!))).join(' ')
+
+export const head = (l: Limits) => join(heads(l))
+
+export const line = (row: SubagentRow, l: Limits) => join(cells(row, l))
 
 export const foot = (l: Limits) => `warn ${Math.round(l.warn * 100)}% · stop ${Math.round(l.alert * 100)}% of ${label(l.window)}`
