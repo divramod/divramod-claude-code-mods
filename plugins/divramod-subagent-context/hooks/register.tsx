@@ -4,7 +4,7 @@ import type { AgentInfo, EngineInterface, Register, TurnStepInput, TurnUsage } f
 import type { SubagentRow, TableState } from '../types'
 import { LIMIT, type File, idOf, metaOf, rowOf } from './backfill'
 import { adopt, fill, mark, record } from './rows'
-import { type TableProps, isState } from './grid'
+import { type TableProps, isClose, isState } from './grid'
 import { type Limits, WIDTHS, cells, color, foot, head, heads, limits, line, running, share, tone, values } from './table'
 
 const PANE = 'subagent-context'
@@ -104,7 +104,8 @@ export const register: Register = (on, options) => {
 
   on('ui.message', async ($, e, next) => {
     const result = await next(e)
-    if (e.requestId === PANE && e.element === 'table' && isState(e.data)) await update($, view, () => e.data as TableState)
+    if (e.requestId === PANE && e.element === 'table' && isClose(e.data)) await $.ui.close({ id: PANE })
+    else if (e.requestId === PANE && e.element === 'table' && isState(e.data)) await update($, view, () => e.data as TableState)
     return result
   })
 

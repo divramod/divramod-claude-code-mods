@@ -27,6 +27,9 @@ export const restore = (props: TableProps): View => {
 export const saved = (view: View): TableState => ({ sort: view.sort ?? null, widths: view.widths, filter: view.filter ?? 'all' })
 
 // A post's data is the Client's own, but crosses as `unknown`: only a whole TableState is kept.
+// What the Client posts when `q` is pressed.
+export const isClose = (data: unknown) => typeof data === 'object' && data !== null && (data as { close?: unknown }).close === true
+
 export const isState = (data: unknown): data is TableState => {
   const d = data as TableState | null
   return (

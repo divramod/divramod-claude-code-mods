@@ -17,7 +17,7 @@ const commit = (surface: ClientSurface<View>, next: View) => {
   surface.post(kept)
 }
 
-// The subagents' table, drawn on the surface: a click on a tab or `a` `r` `f` filters, a click on a header label
+// The subagents' table, drawn on the surface: a click on a tab or `a` `r` `f` filters, `q` closes, a click on a header label
 // sorts, a drag on a border resizes (D14, D16).
 export default function TableView(props: TableProps, surface: ClientSurface<View>) {
   const { Box, Text } = surface.elements
@@ -32,6 +32,8 @@ export default function TableView(props: TableProps, surface: ClientSurface<View
       if (next !== view) commit(surface, next)
     })
     surface.onKey(e => {
+      // `q` closes the pane: the hooks module does it, a Client cannot (D18).
+      if (e.key === 'q' && !e.ctrl && !e.meta) return surface.post({ close: true })
       const view = surface.state
       const next = view && !e.ctrl && !e.meta ? key(view, e.key) : view
       if (next && next !== view) commit(surface, next)
