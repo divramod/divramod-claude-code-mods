@@ -37,9 +37,12 @@ export default function TableView(props: TableProps, surface: ClientSurface<View
     surface.onKey(e => {
       // `q` closes the pane: the hooks module does it, a Client cannot (D18).
       if (e.key === 'q' && !e.ctrl && !e.meta) return surface.post({ close: true })
-      // `s` `p` `a` switch the pane's tab: the hooks module does it, like `q`.
-      const tab = ({ s: 'subagents', p: 'plans', a: 'agents' } as Record<string, string>)[e.key]
+      // `s` `p` `a` `b` switch the pane's tab: the hooks module does it, like `q`.
+      const tab = ({ s: 'subagents', p: 'plans', a: 'agents', b: 'jobs' } as Record<string, string>)[e.key]
       if (tab && !e.ctrl && !e.meta) return surface.post({ tab })
+      const cur = latest.get(surface) ?? props
+      const dir = ({ left: 'prev', h: 'prev', right: 'next', l: 'next' } as Record<string, string>)[e.key]
+      if (cur.steps && dir && !e.ctrl && !e.meta) return surface.post({ step: dir })
       const view = surface.state
       const ids = order(shown((latest.get(surface) ?? props).rows, view?.filter ?? 'all'), view?.sort).map(r => r.id)
       const next = view && !e.ctrl && !e.meta ? step(view, e.key, ids) : view

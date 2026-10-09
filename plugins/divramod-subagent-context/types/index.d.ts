@@ -21,7 +21,11 @@ export type SubagentRow = {
 export type SessionRow = { id: string; pid: number; name: string; cwd: string; kind: string; status: string; startedAt: number; plan: string; here: boolean }
 
 // The pane's top-level tab.
-export type Tab = 'subagents' | 'plans' | 'agents'
+export type Tab = 'subagents' | 'plans' | 'agents' | 'jobs'
+
+// One background job of this session (a shell, a subagent, a monitor, a workflow, a cron ...), from the `background_tasks`
+// and `session_crons` the engine hands the Stop hooks; `ended` once a later snapshot no longer lists it.
+export type JobRow = { id: string; type: string; status: string; text: string; detail: string; first: number; last: number; ended: boolean }
 
 // The table's sort, column widths and filter, as its Client last posted them; kept for the session.
 export type TableState = {
@@ -34,6 +38,6 @@ export type TableState = {
 
 declare module 'claude-code' {
   interface PluginState {
-    'divramod-subagent-context': { rows: SubagentRow[]; view: TableState | null; epoch: number; sessions: SessionRow[]; tab: Tab; plansView: TableState | null; agentsView: TableState | null }
+    'divramod-subagent-context': { rows: SubagentRow[]; view: TableState | null; epoch: number; sessions: SessionRow[]; tab: Tab; plansView: TableState | null; agentsView: TableState | null; jobsView: TableState | null; jobs: JobRow[]; jobType: string }
   }
 }

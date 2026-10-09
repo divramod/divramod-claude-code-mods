@@ -6,8 +6,8 @@ import type { TableState } from '../types'
 // color (`null`: the surface's default) and whether it still runs.
 export type TableRow = { id: string; cells: string[]; values: (string | number | null)[]; color: string | null; running: boolean }
 export type Align = 'l' | 'c' | 'r'
-// `sums` is the sum row for each filter; `aligns` the alignment of each column; `epoch` changes when the pane chose the view; `plain` (the tabs row's text) says there are no filters; `give` is the column that gives way first when the pane is narrow (1: the Subagent column).
-export type TableProps = { heads: string[]; widths: number[]; aligns: Align[]; rows: TableRow[]; sums: Record<Filter, string[]>; view: TableState | null; epoch?: number; plain?: string; give?: number }
+// `sums` is the sum row for each filter; `aligns` the alignment of each column; `epoch` changes when the pane chose the view; `plain` (the tabs row's text) says there are no filters; `steps` says `h` `l` and the arrows step something outside the table (the jobs' type); `give` is the column that gives way first when the pane is narrow (1: the Subagent column).
+export type TableProps = { heads: string[]; widths: number[]; aligns: Align[]; rows: TableRow[]; sums: Record<Filter, string[]>; view: TableState | null; epoch?: number; plain?: string; give?: number; steps?: boolean }
 
 export type Sort = { col: number; dir: 'asc' | 'desc' }
 
@@ -35,7 +35,13 @@ export const isClose = (data: unknown) => typeof data === 'object' && data !== n
 // What the Client posts when `s` `p` or `a` is pressed: the tab the pane should show.
 export const tabOf = (data: unknown) => {
   const t = (data as { tab?: unknown } | null)?.tab
-  return t === 'subagents' || t === 'plans' || t === 'agents' ? t : undefined
+  return t === 'subagents' || t === 'plans' || t === 'agents' || t === 'jobs' ? t : undefined
+}
+
+// What the Client posts when `h` `l` or an arrow should step the jobs' type: which way.
+export const stepOf = (data: unknown) => {
+  const s = (data as { step?: unknown } | null)?.step
+  return s === 'prev' || s === 'next' ? s : undefined
 }
 
 export const isState = (data: unknown): data is TableState => {

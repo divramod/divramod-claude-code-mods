@@ -1,12 +1,14 @@
 import { atom, read, update } from 'claude-code'
 import type { AgentInfo, EngineInterface, Register, TurnStepInput, TurnUsage } from 'claude-code'
 
-import type { SessionRow, SubagentRow, TableState, Tab } from '../types'
+import type { JobRow, SessionRow, SubagentRow, TableState, Tab } from '../types'
 import { LIMIT, type File, idOf, metaOf, rowOf } from './backfill'
 import { adopt, fill, mark, record } from './rows'
 import { DAYS, parse, serialize } from './store'
-import { agentsGrid, asTable, lines as gridLines, ordered, parse as parseSession, plansGrid, planOf } from './sessions'
-import { FILTERS, type Filter, type TableProps, type TableRow, isClose, isState, order, tabOf, shown, step } from './grid'
+import { agentsGrid, asTable, lines as gridLines, parse as parseSession, plansGrid, planOf } from './sessions'
+import { jobsGrid, merge, stepType } from './jobs'
+import { TABS, bodyOf, count } from './tabs'
+import { FILTERS, type Filter, type TableProps, type TableRow, isClose, isState, order, stepOf, tabOf, shown, step } from './grid'
 import { ALIGNS, type Limits, WIDTHS, cells, color, foot, head, heads, limits, line, running, sums, values } from './table'
 
 const PANE = 'subagent-context'
@@ -30,18 +32,27 @@ async function press($: EngineInterface, l: Limits, key: string) {
   await update($, view, () => ({ sort: next.sort, widths: next.widths, filter: next.filter, cursor: next.cursor ?? null }))
   await update($, epoch, n => n + 1)
 }
-// `j` `k` on the plans or agents tab: the row cursor of that table, so the keys never fall through to the prompt.
-async function pressSessions($: EngineInterface, key: string, which: 'plans' | 'agents') {
-  const kept = which === 'plans' ? await read($, plansView) : await read($, agentsView)
+// `j` `k` on the plans, agents or jobs tab: the row cursor of that table, so the keys never fall through to the prompt.
+async function pressSessions($: EngineInterface, key: string, which: 'plans' | 'agents' | 'jobs') {
   const found = await read($, sessions)
-  const grid = which === 'plans' ? plansGrid(found, 0) : agentsGrid(found, 0)
+  const grid = which === 'plans' ? plansGrid(found, 0) : which === 'agents' ? agentsGrid(found, 0) : jobsGrid(await read($, jobs), await read($, jobType), 0)
+  const kept = which === 'plans' ? await read($, plansView) : which === 'agents' ? await read($, agentsView) : await read($, jobsView)
   const rows = grid.cells.map((cells, i) => ({ id: grid.ids[i]!, cells, values: cells, color: null, running: false }))
   const state = { sort: kept?.sort ?? null, widths: kept?.widths ?? asTable(grid, '', null, grid.ids, 0).widths, filter: 'all' as Filter, cursor: kept?.cursor ?? undefined }
   const next = step(state, key, order(rows, state.sort ?? undefined).map(r => r.id))
   if (next.cursor === state.cursor) return
-  const saved = { sort: state.sort, widths: state.widths, filter: 'all' as Filter, cursor: next.cursor ?? null }
-  if (which === 'plans') await update($, plansView, () => saved)
-  else await update($, agentsView, () => saved)
+  const saved_ = { sort: state.sort, widths: state.widths, filter: 'all' as Filter, cursor: next.cursor ?? null }
+  if (which === 'plans') await update($, plansView, () => saved_)
+  else if (which === 'agents') await update($, agentsView, () => saved_)
+  else await update($, jobsView, () => saved_)
+  await update($, epoch, n => n + 1)
+}
+// `h` `l` on the jobs tab: the type before or after; the cursor starts again.
+async function stepJobs($: EngineInterface, dir: 'prev' | 'next') {
+  const to = stepType(await read($, jobs), await read($, jobType), dir)
+  if (to === (await read($, jobType))) return
+  await update($, jobType, () => to)
+  await update($, jobsView, v => (v ? { ...v, cursor: null } : v))
   await update($, epoch, n => n + 1)
 }
 
@@ -51,7 +62,17 @@ const sessions = atom({ plugin: 'divramod-subagent-context', key: 'sessions' } a
 // The plans and agents tables' own sort, widths and cursor (the subagents' is `view`).
 const plansView = atom({ plugin: 'divramod-subagent-context', key: 'plansView' } as const, null as TableState | null)
 const agentsView = atom({ plugin: 'divramod-subagent-context', key: 'agentsView' } as const, null as TableState | null)
-const TABS = [['subagents', 's'], ['plans', 'p'], ['agents', 'a']] as const
+// This session's background jobs (the engine's `background_tasks` and `session_crons`), the type the Jobs tab shows and its table's view.
+const jobs = atom({ plugin: 'divramod-subagent-context', key: 'jobs' } as const, [] as JobRow[])
+const jobType = atom({ plugin: 'divramod-subagent-context', key: 'jobType' } as const, 'all')
+const jobsView = atom({ plugin: 'divramod-subagent-context', key: 'jobsView' } as const, null as TableState | null)
+
+// A Stop hook's snapshot of the session's in-flight work, merged into the jobs.
+async function snapshot($: EngineInterface, e: { background_tasks?: Parameters<typeof merge>[1]; session_crons?: Parameters<typeof merge>[2] }) {
+  if (!e.background_tasks && !e.session_crons) return
+  const at = await $.clock.now()
+  await update($, jobs, list => merge(list, e.background_tasks ?? [], e.session_crons ?? [], at))
+}
 
 const configDir = async ($: EngineInterface) => (await $.env.get('CLAUDE_CONFIG_DIR')) || `${await $.env.get('HOME')}/.claude`
 
@@ -201,6 +222,7 @@ export const register: Register = (on, options) => {
     // A module older than 0.1.7 pinned a summary line under the prompt; clearing it is harmless when none is set.
     void $.ui.status(undefined)
     void $.ui.open({ id: PANE, title: 'divramod subagents context', rows: wanted(0) })
+    await update($, jobs, () => [])
     void earlier($).then(() => purge($)).catch(() => {})
     void refresh($)
     void $.clock.every(10_000, () => refresh($))
@@ -226,8 +248,15 @@ export const register: Register = (on, options) => {
     return result
   })
 
+  on('classic.Stop', async ($, e, next) => {
+    const result = await next(e)
+    await snapshot($, e)
+    return result
+  })
+
   on('classic.SubagentStop', async ($, e, next) => {
     const result = await next(e)
+    await snapshot($, e)
     const listed = (await $.agent.list()).find(a => a.id === e.agent_id)?.status
     const status = listed === 'failed' || listed === 'killed' ? listed : 'completed'
     const at = await $.clock.now()
@@ -261,11 +290,13 @@ export const register: Register = (on, options) => {
     if (e.requestId !== PANE) return result
     if (isClose(e.data)) await $.ui.close({ id: PANE })
     else if (tabOf(e.data)) await show($, tabOf(e.data)!)
+    else if (stepOf(e.data)) await stepJobs($, stepOf(e.data)!)
     else if (isState(e.data)) {
       const state = e.data as TableState
       if (e.element === 'table') await update($, view, () => state)
       else if (e.element === 'plans-table') await update($, plansView, () => state)
       else if (e.element === 'agents-table') await update($, agentsView, () => state)
+      else if (e.element === 'jobs-table') await update($, jobsView, () => state)
     }
     return result
   })
@@ -290,10 +321,9 @@ export const register: Register = (on, options) => {
     const version = await versionOf($)
     const current = await read($, tab)
     const found = await read($, sessions)
+    const tabJobs = await read($, jobs)
     const now = current === 'subagents' ? 0 : await $.clock.now()
-    const grid = current === 'plans' ? plansGrid(found, now) : agentsGrid(found, now)
-    const empty = current === 'plans' ? 'No session has a current plan.' : 'No Claude sessions found.'
-    const sessionTable: TableProps = { ...asTable(grid, `${grid.cells.length} sessions · reloaded every 10 s · ● this session`, (current === 'plans' ? await read($, plansView) : await read($, agentsView)), grid.ids, current === 'plans' ? 0 : 3), epoch: await read($, epoch) }
+    const body_ = current === 'subagents' ? undefined : bodyOf(current, found, await read($, jobs), await read($, jobType), { plans: await read($, plansView), agents: await read($, agentsView), jobs: await read($, jobsView) }, await read($, epoch), now)
     const room = Math.max(1, (e.viewport?.rows ?? 24) - 5)
     // The body is as tall as the pane the surface gave it, so the table grows and shrinks with the window.
     const body = e.props.scroll?.bodyRows
@@ -309,7 +339,7 @@ export const register: Register = (on, options) => {
         </Box>
         <Box gap={2}>
           {TABS.map(([t, key]) => {
-            const label = `${t} ${t === 'subagents' ? list.length : ordered(found, t === 'plans').length}`
+            const label = `${t} ${count(t, list.length, found, tabJobs)}`
             return t === current ? <Text key={t} bold inverse>{` ${key}: ${label} `}</Text> : <Button key={t} label={label} hotkey={key} plain onPress={() => show($, t)} />
           })}
         </Box>
@@ -332,17 +362,19 @@ export const register: Register = (on, options) => {
               <Button label="close" hotkey="q" plain onPress={() => $.ui.close({ id: PANE })} />
             </Box>
           </>
-        ) : (
+        ) : body_ && (
           <>
             {Client ? (
-              <Client key={`${current}-table`} module="./table-view.tsx" props={sessionTable} flexGrow={1} />
+              <Client key={`${current}-table`} module="./table-view.tsx" props={body_.table} flexGrow={1} />
             ) : (
               <Box flexDirection="column" flexGrow={1}>
-                {gridLines(grid, empty, e.props.bodyColumns ?? e.viewport?.columns ?? 0, (body ?? 24) - 10).map((t, i) => <Text key={String(i)} dimColor={!/^│/.test(t)}>{t}</Text>)}
+                {gridLines(body_.grid, body_.empty, e.props.bodyColumns ?? e.viewport?.columns ?? 0, (body ?? 24) - 10).map((t, i) => <Text key={String(i)} dimColor={!/^│/.test(t)}>{t}</Text>)}
               </Box>
             )}
-            <Text dimColor>{`${ordered(found, current === 'plans').length} sessions · reloaded every 10 s · ● this session`}</Text>
+            <Text dimColor>{body_.foot}</Text>
             <Box gap={1}>
+              {current === 'jobs' && <Button label="prev type" hotkey="h" plain onPress={() => stepJobs($, 'prev')} />}
+              {current === 'jobs' && <Button label="next type" hotkey="l" plain onPress={() => stepJobs($, 'next')} />}
               <Button label="down" hotkey="j" plain onPress={() => pressSessions($, 'j', current)} />
               <Button label="up" hotkey="k" plain onPress={() => pressSessions($, 'k', current)} />
               <Text dimColor>·</Text>

@@ -149,3 +149,29 @@ test('s, p and a switch between the subagents, the plans of the live sessions an
   expect(await ui.find({ type: 'Text', text: /alpha/, in: 'table' })).toBeDefined()
   await ui.unmount()
 })
+
+const stop = (over: object) => ({ stop_hook_active: false, ...over })
+
+test('b shows the session\'s background jobs by type; h and l step the type, a snapshot without a job ends it', async ($, on) => {
+  on('classic.Stop', () => ({}))
+  await steps($, on)
+  const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, scroll: { offset: 0, bodyRows: 30 } } })
+  await $.classic.Stop(stop({
+    background_tasks: [{ id: 'b1', type: 'shell', status: 'running', description: 'watch logs', command: 'tail -f x' }, { id: 'a1', type: 'subagent', status: 'running', description: 'Plan 0222 row 1: x' }],
+    session_crons: [{ id: 'c1', schedule: '*/5 * * * *', recurring: true, prompt: 'check CI' }],
+  }))
+  expect((await ui.find({ type: 'Button', key: 'jobs' }))?.props.hotkey).toBe('b')
+  await ui.press({ key: 'jobs' })
+  const texts = async () => (await ui.findAll({ type: 'Text', in: 'jobs-table' })).map(t => t.text)
+  expect((await texts())[0]).toBe('[all 3]  cron 1  shell 1  subagent 1')
+  await ui.key({ key: 'l', in: 'jobs-table' })
+  expect((await texts())[0]).toBe('all 3  [cron 1]  shell 1  subagent 1')
+  expect((await texts()).filter(t => t.startsWith('│')).slice(1, -1).map(t => t.split('│')[1]!.trim())).toEqual(['cron'])
+  await ui.key({ key: 'h', in: 'jobs-table' })
+  await $.classic.Stop(stop({ background_tasks: [{ id: 'b1', type: 'shell', status: 'running', description: 'watch logs', command: 'tail -f x' }], session_crons: [] }))
+  const lines = (await texts()).filter(t => t.startsWith('│')).slice(1, -1)
+  expect(lines).toHaveLength(3)
+  expect(lines[0]).toMatch(/shell\s+│\s+running/)
+  expect(lines.filter(t => /ended/.test(t))).toHaveLength(2)
+  await ui.unmount()
+})

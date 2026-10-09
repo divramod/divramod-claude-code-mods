@@ -86,14 +86,15 @@ export const lines = (g: Grid, empty: string, columns = 0, max = Infinity) => {
 // The grid as the table's props (the `Client` lays it out and follows the pane's size): each column as wide as its
 // longest cell (at most CAP), the first column giving way when the pane is narrow.
 const CAP = 44
-const total = (g: Grid) => [`${g.cells.length} sessions`, ...g.heads.slice(1).map(() => '')]
-export const asTable = (g: Grid, label: string, view: TableState | null, ids: readonly string[], give: number): TableProps => ({
+const total = (g: Grid, noun: string) => [`${g.cells.length} ${noun}`, ...g.heads.slice(1).map(() => '')]
+export const asTable = (g: Grid, label: string, view: TableState | null, ids: readonly string[], give: number, noun = 'sessions', steps = false): TableProps => ({
   heads: g.heads,
   widths: g.heads.map((h, i) => Math.min(CAP, Math.max(h.length, ...g.cells.map(c => c[i]!.length))) + 2),
   aligns: g.aligns,
   rows: g.cells.map((cells, i) => ({ id: ids[i]!, cells, values: cells, color: null, running: false })),
-  sums: { all: total(g), running: total(g), finished: total(g) },
+  sums: { all: total(g, noun), running: total(g, noun), finished: total(g, noun) },
   view,
   plain: label,
   give,
+  ...(steps ? { steps } : {}),
 })

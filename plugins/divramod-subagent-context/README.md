@@ -57,14 +57,23 @@ The pane's top right shows the mod's version. The table is as tall as the pane, 
 
 Sort, widths and filter stay while the pane redraws or is closed and reopened.
 
-## Three tabs
+## Four tabs
 
-The bar under the title switches the pane: **subagents** (`s`, this table), **plans** (`p`) and **agents** (`a`).
+The bar under the title switches the pane: **subagents** (`s`, this table), **plans** (`p`), **agents** (`a`) and **jobs** (`b`).
 Plans lists the Claude Code sessions of this machine whose folder has a `plans/CURRENT_PLAN`, with the plan, the
 session's name, its folder, its status and its age; Agents lists every live session the same way. `●` marks this
 session. Both read `<config>/sessions/<pid>.json` (the files Claude Code keeps for each running session), check with `ps`
 that the process still runs, and reload every 10 seconds while the module is loaded. A name is the session's own name,
 else its folder's. Both tables are drawn like the subagents' table (sort by a header, drag the borders, `j` / `k` move a row, `q` closes) and follow the pane's size: when it is narrow the plan (or the agent) column gives way first.
+
+### Jobs
+
+Jobs lists the background work of this session: what the engine hands the Stop hooks as `background_tasks` (the types
+`shell`, `subagent`, `monitor`, `workflow`, `MCP task`, `teammate` and any other it names) and `session_crons` (type
+`cron`: CronCreate, ScheduleWakeup and `/loop`). The line above the table counts each type seen, the shown one in
+brackets; `h` / `l` (or the arrows, or the `prev type` / `next type` buttons) step through the types. A job a later
+snapshot no longer lists is marked `ended`; running ones come first. The list starts empty with each session and only
+grows at a Stop (the end of a turn or of a subagent), so a job started in the current turn shows after it.
 
 ## Remembered rows
 
