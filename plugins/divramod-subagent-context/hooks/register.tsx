@@ -96,6 +96,8 @@ export const register: Register = (on, options) => {
     const started = await next(e)
     await $.command.register({ name: 'divramod-subagent-context', description: 'Show the context use of this session\'s subagents' })
     l = limits(options, (await $.session.usage()).context.window)
+    // A module older than 0.1.7 pinned a summary line under the prompt; clearing it is harmless when none is set.
+    void $.ui.status(undefined)
     void $.ui.open({ id: PANE, title: 'Subagents: context', rows: wanted(0) })
     void earlier($).catch(() => {})
     return started

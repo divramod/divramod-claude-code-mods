@@ -93,6 +93,8 @@ test('at the start the pane lists the subagents that ran before the mod loaded',
   on('session.usage', () => ({ value: { context: { window: 1_000_000 } } as never }))
   on('command.register', () => ({ value: undefined as never }))
   on('ui.open', () => ({ value: undefined as never }))
+  const statuses: unknown[] = []
+  on('ui.status', (_$, e) => { statuses.push(e.text); return { value: undefined } })
   on('session.id', () => ({ value: 'S1' }))
   on('agent.list', () => ({ value: [{ id: 'live', description: 'Live one', type: 'general-purpose', status: 'running' }] }))
   const files: Record<string, string> = {
@@ -109,6 +111,7 @@ test('at the start the pane lists the subagents that ran before the mod loaded',
   })
   await $.session.start({ cwd: '/w', surface: 'terminal', isInteractive: true })
   await clock.settle()
+  expect(statuses).toEqual([undefined])
   const ui = await $.ui.mount(PANE)
   const old = await ui.find({ type: 'Text', text: /Old one\s+│\s+sonnet\s+│\s+high\s+│\s+2 │\s+120k │\s+120k /, in: 'table' })
   expect(old).toBeDefined()
