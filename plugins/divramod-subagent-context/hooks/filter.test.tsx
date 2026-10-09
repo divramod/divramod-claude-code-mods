@@ -7,7 +7,7 @@ import { mounted } from './testkit'
 const stop = (agent_id: string) => ({ agent_id, agent_type: 'general-purpose', agent_transcript_path: '', stop_hook_active: false })
 
 // The tabs as drawn: ` All 3 ` at x 0-6, ` Running n ` from x 8, ` Finished n ` after it.
-test('each filter shows the right rows, chosen by a click on its tab or by its key', async ($, on) => {
+test('each filter shows the right rows, chosen by a click on its tab or by the arrow keys', async ($, on) => {
   const { ui, all, texts, names, click, status } = await mounted($, on)
   Object.assign(status, { beta: 'completed', gamma: 'failed' })
   await $.classic.SubagentStop(stop('beta'))
@@ -17,11 +17,11 @@ test('each filter shows the right rows, chosen by a click on its tab or by its k
   await click(10, 0)
   expect(await names()).toEqual(['alpha'])
   expect((await ui.find({ type: 'Text', text: ' Running 1 ', in: 'table' }))?.props.inverse).toBe(true)
-  await ui.key({ key: 'f', in: 'table' })
+  await ui.key({ key: 'right', in: 'table' })
   expect(await names()).toEqual(['beta', 'gamma'])
   await click(2, 0)
   expect(await names()).toEqual(['alpha', 'beta', 'gamma'])
-  await ui.key({ key: 'r', in: 'table' })
+  await ui.key({ key: 'right', in: 'table' })
   expect(await names()).toEqual(['alpha'])
   await ui.key({ key: 'left', in: 'table' })
   expect(await names()).toEqual(['alpha', 'beta', 'gamma'])
@@ -52,16 +52,16 @@ test('a subagent has its row from its start, before its first step; a stop it wa
   await ui.unmount()
 })
 
-test("the pane's own buttons r and f choose the filter without a click into the table", async ($, on) => {
+test('r and f no longer choose a filter (a is the Agents tab); the pane has no running or finished button, next and prev do', async ($, on) => {
   const { ui, names, status } = await mounted($, on)
   Object.assign(status, { beta: 'completed' })
   await $.classic.SubagentStop(stop('beta'))
-  for (const [key, hotkey] of [['running', 'r'], ['finished', 'f']] as const) expect((await ui.find({ type: 'Button', key }))?.props.hotkey).toBe(hotkey)
-  await ui.press({ key: 'running' })
+  for (const key of ['r', 'f']) await ui.key({ key, in: 'table' })
+  expect(await names()).toEqual(['alpha', 'beta', 'gamma'])
+  expect(await ui.find({ type: 'Button', key: 'running' })).toBeUndefined()
+  expect(await ui.find({ type: 'Button', key: 'finished' })).toBeUndefined()
+  await ui.press({ key: 'next' })
   expect(await names()).toEqual(['alpha', 'gamma'])
-  await ui.press({ key: 'finished' })
-  expect(await names()).toEqual(['beta'])
-  await ui.press({ key: 'prev' })
   await ui.press({ key: 'prev' })
   expect(await names()).toEqual(['alpha', 'beta', 'gamma'])
   await ui.unmount()

@@ -11,7 +11,7 @@ test('a redraw and a remount show the last sort, widths and filter', async ($, o
   await $.classic.SubagentStop(stop('beta'))
   await click(PEAK)
   await drag(BORDER, BORDER + 4)
-  await ui.key({ key: 'r', in: 'table' })
+  await ui.key({ key: 'right', in: 'table' })
   const shows = async (n: () => Promise<(string | undefined)[]>, h: () => Promise<string>) => {
     expect(await n()).toEqual(['gamma', 'alpha'])
     expect(await h()).toMatch(/Peak ▲/)

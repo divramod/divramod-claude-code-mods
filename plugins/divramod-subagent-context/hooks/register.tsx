@@ -287,8 +287,6 @@ export const register: Register = (on, options) => {
             <Text dimColor>{`${foot(l)} · live`}</Text>
             {/* The pane's own keys: they work while the pane holds the keyboard, without a click into the table. */}
             <Box gap={1}>
-              {FILTERS.filter(f => f !== 'all').map(f => <Button key={f} label={f} hotkey={f[0]!} plain onPress={() => press($, l, f[0]!)} />)}
-              <Text dimColor>·</Text>
               {([['h', 'prev'], ['l', 'next'], ['j', 'down'], ['k', 'up']] as const).map(([k, label]) => <Button key={label} label={label} hotkey={k} plain onPress={() => press($, l, k)} />)}
               <Text dimColor>·</Text>
               <Button label="close" hotkey="q" plain onPress={() => $.ui.close({ id: PANE })} />

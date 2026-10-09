@@ -48,7 +48,7 @@ Sort, resize and filter (in the terminal and desktop apps; VS Code and mobile sh
 
 - **Sort**: click a header: ascending, descending, off.
 - **Resize**: drag any column border, on the header or on any row, left or right. The table is never stretched, and never wider than the pane: the Subagent column gives way.
-- **Filter**: click the tabs All, Running, Finished, or press `r` (running), `f` (finished), `h` / `l` or the left / right arrows (the tab before / after).
+- **Filter**: click the tabs All, Running, Finished, or press `h` / `l` or the left / right arrows (the tab before / after); `a`, `r` and `f` are not filter keys (`a` is the Agents tab).
 - **Rows**: `j` / `k` or the down / up arrows move a highlighted row; the pane's own keys (buttons under the table) work while the pane has the keyboard, the arrows once the table has it.
 
 - **Close**: press `q` while the pane has the keyboard, or click `close` under the table (Esc hands the keyboard back to the prompt; `ctrl+x x` also closes).

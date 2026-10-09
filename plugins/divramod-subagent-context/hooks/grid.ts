@@ -175,12 +175,12 @@ export const point = (view: View, e: ClientPointerEvent, laid: readonly number[]
   return view
 }
 
-// What a key does to the filter and the cursor: `r` `f` choose the running or the finished rows (`a` is the Agents tab), `left` `right` `h` `l` the tab before or
+// What a key does to the filter and the cursor: `left` `right` `h` `l` the tab before or
 // after (the ends stay), `up` `down` `k` `j` the row before or after in `ids` (the shown rows' ids, in order); a new
 // filter drops the cursor. Anything else, and a move that changes nothing, returns the same state.
 export const step = <S extends { filter?: Filter; cursor?: string | undefined }>(state: S, k: string, ids: readonly string[]): S => {
   const at = FILTERS.indexOf(state.filter ?? 'all')
-  const tab = k === 'left' || k === 'h' ? FILTERS[Math.max(0, at - 1)] : k === 'right' || k === 'l' ? FILTERS[Math.min(FILTERS.length - 1, at + 1)] : FILTERS.find(f => f !== 'all' && f[0] === k)
+  const tab = k === 'left' || k === 'h' ? FILTERS[Math.max(0, at - 1)] : k === 'right' || k === 'l' ? FILTERS[Math.min(FILTERS.length - 1, at + 1)] : undefined
   if (tab) return tab === (state.filter ?? 'all') ? state : { ...state, filter: tab, cursor: undefined }
   const dir = k === 'down' || k === 'j' ? 1 : k === 'up' || k === 'k' ? -1 : 0
   if (!dir || !ids.length) return state
