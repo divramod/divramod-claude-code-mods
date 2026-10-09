@@ -128,6 +128,7 @@ test('rows without counts sort last both ways; a header cell is a label, a borde
   expect(hit([5, 5], 13)).toBeUndefined()
   expect(fit([5, 5, 5], 0)).toEqual([5, 5, 5])
   expect(fit([5, 9, 5], 20)).toEqual([5, 6, 5])
-  expect(fit([5, 9, 5], 16)).toEqual([5, 3, 5])
+  expect(fit([5, 9, 5], 16)).toEqual([4, 3, 5])
+  expect(fit([20, 9, 5], 30, 0)).toEqual([12, 9, 5])
   expect(fit([5, 9, 5], 60)).toEqual([5, 9, 5])
 })

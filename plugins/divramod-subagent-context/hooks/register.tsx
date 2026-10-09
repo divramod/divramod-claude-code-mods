@@ -5,7 +5,7 @@ import type { SessionRow, SubagentRow, TableState, Tab } from '../types'
 import { LIMIT, type File, idOf, metaOf, rowOf } from './backfill'
 import { adopt, fill, mark, record } from './rows'
 import { parse, serialize } from './store'
-import { agentsGrid, lines as gridLines, ordered, parse as parseSession, plansGrid, planOf } from './sessions'
+import { agentsGrid, asTable, lines as gridLines, ordered, parse as parseSession, plansGrid, planOf } from './sessions'
 import { FILTERS, type Filter, type TableProps, type TableRow, isClose, isState, order, shown, step } from './grid'
 import { ALIGNS, type Limits, WIDTHS, cells, color, foot, head, heads, limits, line, running, sums, values } from './table'
 
@@ -33,6 +33,9 @@ async function press($: EngineInterface, l: Limits, key: string) {
 // The pane's top-level tab and the sessions of this machine the Plans and Agents tabs list (reloaded every 10 seconds).
 const tab = atom({ plugin: 'divramod-subagent-context', key: 'tab' } as const, 'subagents' as Tab)
 const sessions = atom({ plugin: 'divramod-subagent-context', key: 'sessions' } as const, [] as SessionRow[])
+// The plans and agents tables' own sort, widths and cursor (the subagents' is `view`).
+const plansView = atom({ plugin: 'divramod-subagent-context', key: 'plansView' } as const, null as TableState | null)
+const agentsView = atom({ plugin: 'divramod-subagent-context', key: 'agentsView' } as const, null as TableState | null)
 const TABS = [['subagents', 's'], ['plans', 'p'], ['agents', 'a']] as const
 
 const configDir = async ($: EngineInterface) => (await $.env.get('CLAUDE_CONFIG_DIR')) || `${await $.env.get('HOME')}/.claude`
@@ -216,8 +219,14 @@ export const register: Register = (on, options) => {
 
   on('ui.message', async ($, e, next) => {
     const result = await next(e)
-    if (e.requestId === PANE && e.element === 'table' && isClose(e.data)) await $.ui.close({ id: PANE })
-    else if (e.requestId === PANE && e.element === 'table' && isState(e.data)) await update($, view, () => e.data as TableState)
+    if (e.requestId !== PANE) return result
+    if (isClose(e.data)) await $.ui.close({ id: PANE })
+    else if (isState(e.data)) {
+      const state = e.data as TableState
+      if (e.element === 'table') await update($, view, () => state)
+      else if (e.element === 'plans-table') await update($, plansView, () => state)
+      else if (e.element === 'agents-table') await update($, agentsView, () => state)
+    }
     return result
   })
 
@@ -241,6 +250,9 @@ export const register: Register = (on, options) => {
     const current = await read($, tab)
     const found = await read($, sessions)
     const now = current === 'subagents' ? 0 : await $.clock.now()
+    const grid = current === 'plans' ? plansGrid(found, now) : agentsGrid(found, now)
+    const empty = current === 'plans' ? 'No session has a current plan.' : 'No Claude sessions found.'
+    const sessionTable = asTable(grid, `${grid.cells.length} sessions · reloaded every 10 s · ● this session`, (current === 'plans' ? await read($, plansView) : await read($, agentsView)), grid.ids, current === 'plans' ? 0 : 3)
     const room = Math.max(1, (e.viewport?.rows ?? 24) - 5)
     // The body is as tall as the pane the surface gave it, so the table grows and shrinks with the window.
     const body = e.props.scroll?.bodyRows
@@ -283,9 +295,13 @@ export const register: Register = (on, options) => {
           </>
         ) : (
           <>
-            <Box flexDirection="column" flexGrow={1}>
-              {gridLines(current === 'plans' ? plansGrid(found, now) : agentsGrid(found, now), current === 'plans' ? 'No session has a current plan.' : 'No Claude sessions found.', e.props.bodyColumns ?? e.viewport?.columns ?? 0, (body ?? 24) - 10).map((t, i) => <Text key={String(i)} dimColor={!/^│/.test(t)}>{t}</Text>)}
-            </Box>
+            {Client ? (
+              <Client key={`${current}-table`} module="./table-view.tsx" props={sessionTable} flexGrow={1} />
+            ) : (
+              <Box flexDirection="column" flexGrow={1}>
+                {gridLines(grid, empty, e.props.bodyColumns ?? e.viewport?.columns ?? 0, (body ?? 24) - 10).map((t, i) => <Text key={String(i)} dimColor={!/^│/.test(t)}>{t}</Text>)}
+              </Box>
+            )}
             <Text dimColor>{`${ordered(found, current === 'plans').length} sessions · reloaded every 10 s · ● this session`}</Text>
             <Button label="close" hotkey="q" plain onPress={() => $.ui.close({ id: PANE })} />
           </>

@@ -31,7 +31,7 @@ export default function TableView(props: TableProps, surface: ClientSurface<View
     surface.onPointer(e => {
       const view = surface.state
       if (!view) return
-      const next = point(view, e, fit(view.widths, surface.columns), tabs((latest.get(surface) ?? props).rows))
+      const next = point(view, e, fit(view.widths, surface.columns, (latest.get(surface) ?? props).give), tabs((latest.get(surface) ?? props).rows))
       if (next !== view) commit(surface, next)
     })
     surface.onKey(e => {
@@ -40,6 +40,8 @@ export default function TableView(props: TableProps, surface: ClientSurface<View
       const view = surface.state
       const ids = order(shown((latest.get(surface) ?? props).rows, view?.filter ?? 'all'), view?.sort).map(r => r.id)
       const next = view && !e.ctrl && !e.meta ? step(view, e.key, ids) : view
+      // A table without filters (plans, agents) keeps `all`: a key or a click that would change it does nothing.
+      if (next && next.filter !== view?.filter && (latest.get(surface) ?? props).plain !== undefined) return
       if (next && next !== view) commit(surface, next)
     })
   }
@@ -50,7 +52,7 @@ export default function TableView(props: TableProps, surface: ClientSurface<View
   epochs.set(surface, props.epoch ?? 0)
   const view = surface.state ?? restore(props)
   const filter = view.filter ?? 'all'
-  const laid = fit(view.widths, surface.columns)
+  const laid = fit(view.widths, surface.columns, props.give)
   const rows = order(shown(props.rows, filter), view.sort)
   // As many rows as fit between the lines the table itself needs: the newest unsorted, the first ones sorted.
   const room = fits(rows.length, surface.rows)
@@ -59,17 +61,17 @@ export default function TableView(props: TableProps, surface: ClientSurface<View
   const visible = rows.slice(from, from + room)
   return (
     <Box flexDirection="column">
-      <Box flexDirection="row" gap={1}>
+      {props.plain !== undefined ? <Text dimColor>{props.plain}</Text> : <Box flexDirection="row" gap={1}>
         {tabs(props.rows).map((label, i) => (
           <Text key={FILTERS[i]} inverse={FILTERS[i] === filter} dimColor={FILTERS[i] !== filter}>
             {label}
           </Text>
         ))}
-      </Box>
+      </Box>}
       <Text dimColor>{rule(laid, 'top')}</Text>
       <Text bold>{header(props.heads, laid, props.aligns, view.sort)}</Text>
       <Text dimColor>{rule(laid, 'mid')}</Text>
-      {rows.length === 0 && <Text dimColor>{line([props.rows.length ? 'No subagents in this view.' : 'No subagents yet.'], [laid.reduce((sum, w) => sum + w + 1, -1)], ['l'])}</Text>}
+      {rows.length === 0 && <Text dimColor>{line([props.plain !== undefined ? 'None.' : props.rows.length ? 'No subagents in this view.' : 'No subagents yet.'], [laid.reduce((sum, w) => sum + w + 1, -1)], ['l'])}</Text>}
       {visible.map((r, i) => (
         <Box key={r.id} flexDirection="column">
           {i > 0 && <Text dimColor>{rule(laid, 'mid')}</Text>}

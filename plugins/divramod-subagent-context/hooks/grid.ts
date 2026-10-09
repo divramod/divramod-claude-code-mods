@@ -6,8 +6,8 @@ import type { TableState } from '../types'
 // color (`null`: the surface's default) and whether it still runs.
 export type TableRow = { id: string; cells: string[]; values: (string | number | null)[]; color: string | null; running: boolean }
 export type Align = 'l' | 'c' | 'r'
-// `sums` is the sum row for each filter; `aligns` the alignment of each column; `epoch` changes when the pane chose the view.
-export type TableProps = { heads: string[]; widths: number[]; aligns: Align[]; rows: TableRow[]; sums: Record<Filter, string[]>; view: TableState | null; epoch?: number }
+// `sums` is the sum row for each filter; `aligns` the alignment of each column; `epoch` changes when the pane chose the view; `plain` (the tabs row's text) says there are no filters; `give` is the column that gives way first when the pane is narrow (1: the Subagent column).
+export type TableProps = { heads: string[]; widths: number[]; aligns: Align[]; rows: TableRow[]; sums: Record<Filter, string[]>; view: TableState | null; epoch?: number; plain?: string; give?: number }
 
 export type Sort = { col: number; dir: 'asc' | 'desc' }
 
@@ -114,10 +114,16 @@ const tabAt = (labels: readonly string[], x: number) => {
 // The table's width: a border before each column and one after the last.
 export const widthOf = (widths: readonly number[]) => widths.reduce((sum, w) => sum + w + 1, 1)
 
-// The widths laid out in `columns` cells: too wide, the Subagent column gives way, down to MIN; never stretched.
-export const fit = (widths: readonly number[], columns: number) => {
+// The widths laid out in `columns` cells: too wide, the `give` column gives way down to MIN, then the widest others;
+// never stretched.
+export const fit = (widths: readonly number[], columns: number, give = 1) => {
   const laid = [...widths]
-  if (columns && laid.length > 1) laid[1] = Math.max(MIN, laid[1]! - Math.max(0, widthOf(laid) - columns))
+  if (!columns) return laid
+  while (widthOf(laid) > columns) {
+    const col = laid[give]! > MIN ? give : laid.indexOf(Math.max(...laid))
+    if (laid[col]! <= MIN) break
+    laid[col]!--
+  }
   return laid
 }
 

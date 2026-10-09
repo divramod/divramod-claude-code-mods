@@ -64,7 +64,7 @@ Plans lists the Claude Code sessions of this machine whose folder has a `plans/C
 session's name, its folder, its status and its age; Agents lists every live session the same way. `●` marks this
 session. Both read `<config>/sessions/<pid>.json` (the files Claude Code keeps for each running session), check with `ps`
 that the process still runs, and reload every 10 seconds while the module is loaded. A name is the session's own name,
-else its folder's.
+else its folder's. Both tables are drawn like the subagents' table (sort by a header, drag the borders, `j` / `k` move a row, `q` closes) and follow the pane's size: when it is narrow the plan (or the agent) column gives way first.
 
 ## Remembered rows
 

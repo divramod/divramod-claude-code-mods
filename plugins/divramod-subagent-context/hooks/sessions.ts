@@ -1,5 +1,5 @@
-import type { SessionRow } from '../types'
-import { type Align, line, rule } from './grid'
+import type { SessionRow, TableState } from '../types'
+import { type Align, type TableProps, line, rule } from './grid'
 
 // One Claude Code session as its `~/.claude/sessions/<pid>.json` says it; undefined when the text is no session.
 export const parse = (text: string): Omit<SessionRow, 'plan' | 'here'> | undefined => {
@@ -40,18 +40,20 @@ export const ago = (ms: number, now: number) => {
 export const ordered = (rows: readonly SessionRow[], onlyPlans: boolean) =>
   rows.filter(r => !onlyPlans || r.plan).sort((a, b) => Number(b.here) - Number(a.here) || a.name.localeCompare(b.name))
 
-export type Grid = { heads: string[]; aligns: Align[]; cells: string[][] }
+export type Grid = { heads: string[]; aligns: Align[]; cells: string[][]; ids: string[] }
 
 export const agentsGrid = (rows: readonly SessionRow[], now: number): Grid => ({
   heads: ['Agent', 'Folder', 'Status', 'Plan', 'Age'],
   aligns: ['l', 'l', 'c', 'l', 'r'],
   cells: ordered(rows, false).map(r => [`${r.here ? '● ' : ''}${r.name}`, folder(r.cwd), r.status || r.kind, r.plan || '-', ago(r.startedAt, now)]),
+  ids: ordered(rows, false).map(r => r.id || String(r.pid)),
 })
 
 export const plansGrid = (rows: readonly SessionRow[], now: number): Grid => ({
   heads: ['Plan', 'Agent', 'Folder', 'Status', 'Age'],
   aligns: ['l', 'l', 'l', 'c', 'r'],
   cells: ordered(rows, true).map(r => [r.plan, `${r.here ? '● ' : ''}${r.name}`, folder(r.cwd), r.status || r.kind, ago(r.startedAt, now)]),
+  ids: ordered(rows, true).map(r => r.id || String(r.pid)),
 })
 
 const MIN = 8
@@ -80,3 +82,18 @@ export const lines = (g: Grid, empty: string, columns = 0, max = Infinity) => {
   if (g.cells.length > shown.length) out.push(`… ${g.cells.length - shown.length} more: make the pane taller`)
   return out
 }
+
+// The grid as the table's props (the `Client` lays it out and follows the pane's size): each column as wide as its
+// longest cell (at most CAP), the first column giving way when the pane is narrow.
+const CAP = 44
+const total = (g: Grid) => [`${g.cells.length} sessions`, ...g.heads.slice(1).map(() => '')]
+export const asTable = (g: Grid, label: string, view: TableState | null, ids: readonly string[], give: number): TableProps => ({
+  heads: g.heads,
+  widths: g.heads.map((h, i) => Math.min(CAP, Math.max(h.length, ...g.cells.map(c => c[i]!.length))) + 2),
+  aligns: g.aligns,
+  rows: g.cells.map((cells, i) => ({ id: ids[i]!, cells, values: cells, color: null, running: false })),
+  sums: { all: total(g), running: total(g), finished: total(g) },
+  view,
+  plain: label,
+  give,
+})
