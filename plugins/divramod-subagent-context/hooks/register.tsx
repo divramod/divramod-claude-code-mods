@@ -5,7 +5,7 @@ import type { SubagentRow, TableState } from '../types'
 import { LIMIT, type File, idOf, metaOf, rowOf } from './backfill'
 import { adopt, fill, mark, record } from './rows'
 import { parse, serialize } from './store'
-import { FILTERS, type Filter, type TableProps, isClose, isState } from './grid'
+import { FILTERS, type Filter, type TableProps, type TableRow, isClose, isState, order, shown, step } from './grid'
 import { ALIGNS, type Limits, WIDTHS, cells, color, foot, head, heads, limits, line, running, sums, values } from './table'
 
 const PANE = 'subagent-context'
@@ -15,11 +15,18 @@ const view = atom({ plugin: 'divramod-subagent-context', key: 'view' } as const,
 // Bumped when a pane-level key changes the filter: the table is keyed by it, so it starts again from the kept view.
 const epoch = atom({ plugin: 'divramod-subagent-context', key: 'epoch' } as const, 0)
 
-// The pane's own keys `a` `r` `f`, like `q`: they work while the pane holds the keyboard, without a click into the table.
-async function choose($: EngineInterface, filter: Filter) {
-  const kept = await read($, view)
-  if ((kept?.filter ?? 'all') === filter) return
-  await update($, view, () => ({ sort: kept?.sort ?? null, widths: kept?.widths ?? WIDTHS, filter }))
+// The pane's own keys `a` `r` `f` `h` `l` `j` `k`, like `q`: they work while the pane holds the keyboard, without a click
+// into the table. The table's rows as it draws them, so a key moves over what is shown.
+const tableRows = (list: readonly SubagentRow[], l: Limits): TableRow[] =>
+  list.map(row => ({ id: row.id, cells: cells(row, l), values: values(row, l), color: color(row, l) ?? null, running: running(row) }))
+
+async function press($: EngineInterface, l: Limits, key: string) {
+  const kept = (await read($, view)) ?? { sort: null, widths: WIDTHS, filter: 'all' as Filter, cursor: null }
+  const state = { ...kept, cursor: kept.cursor ?? undefined }
+  const ids = order(shown(tableRows(await read($, rows), l), state.filter), state.sort ?? undefined).map(r => r.id)
+  const next = step(state, key, ids)
+  if (next === state) return
+  await update($, view, () => ({ sort: next.sort, widths: next.widths, filter: next.filter, cursor: next.cursor ?? null }))
   await update($, epoch, n => n + 1)
 }
 
@@ -179,7 +186,7 @@ export const register: Register = (on, options) => {
       heads: heads(l),
       widths: WIDTHS,
       aligns: ALIGNS,
-      rows: list.map(row => ({ id: row.id, cells: cells(row, l), values: values(row, l), color: color(row, l) ?? null, running: running(row) })),
+      rows: tableRows(list, l),
       sums: Object.fromEntries(FILTERS.map(f => [f, sums(list.filter(r => f === 'all' || running(r) === (f === 'running')), l)])) as TableProps['sums'],
       view: await read($, view),
       epoch: await read($, epoch),
@@ -202,11 +209,13 @@ export const register: Register = (on, options) => {
             {list.slice(-room).map(row => <Text color={color(row, l)}>{line(row, l)}</Text>)}
           </Box>
         )}
-        <Box>
-          <Text dimColor>{`${foot(l)} · live · `}</Text>
-          {/* The pane's own key: it works while the pane holds the keyboard, without a click into the table. */}
-          {FILTERS.map(f => <Button key={f} label={f} hotkey={f[0]!} plain onPress={() => choose($, f)} />)}
-          <Text dimColor> · </Text>
+        <Text dimColor>{`${foot(l)} · live`}</Text>
+        {/* The pane's own keys: they work while the pane holds the keyboard, without a click into the table. */}
+        <Box gap={1}>
+          {FILTERS.map(f => <Button key={f} label={f} hotkey={f[0]!} plain onPress={() => press($, l, f[0]!)} />)}
+          <Text dimColor>·</Text>
+          {([['h', 'prev'], ['l', 'next'], ['j', 'down'], ['k', 'up']] as const).map(([k, label]) => <Button key={label} label={label} hotkey={k} plain onPress={() => press($, l, k)} />)}
+          <Text dimColor>·</Text>
           <Button label="close" hotkey="q" plain onPress={() => $.ui.close({ id: PANE })} />
         </Box>
       </Box>

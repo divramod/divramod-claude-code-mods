@@ -22,6 +22,8 @@ export type TableState = {
   sort: { col: number; dir: 'asc' | 'desc' } | null
   widths: number[]
   filter: 'all' | 'running' | 'finished'
+  // The row `j` `k` stand on (its subagent id), null for none.
+  cursor?: string | null
 }
 
 declare module 'claude-code' {

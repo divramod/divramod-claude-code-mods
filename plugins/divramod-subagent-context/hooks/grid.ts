@@ -15,18 +15,18 @@ export const FILTERS = ['all', 'running', 'finished'] as const
 export type Filter = (typeof FILTERS)[number]
 
 // The table's own state: the sort, the widths, the filter, a border being dragged and what a button went down on.
-export type View = { sort?: Sort; widths: number[]; filter?: Filter; drag?: { col: number; from: number; width: number }; press?: string }
+export type View = { sort?: Sort; widths: number[]; filter?: Filter; cursor?: string; drag?: { col: number; from: number; width: number }; press?: string }
 
 // What a new instance starts from: the kept state, its widths only while the columns are the same.
 export const restore = (props: TableProps): View => {
   const kept = props.view
   if (!kept) return { widths: props.widths }
   const widths = kept.widths.length === props.widths.length ? kept.widths : props.widths
-  return { widths, filter: kept.filter, ...(kept.sort ? { sort: kept.sort } : {}) }
+  return { widths, filter: kept.filter, ...(kept.sort ? { sort: kept.sort } : {}), ...(kept.cursor ? { cursor: kept.cursor } : {}) }
 }
 
 // What is kept of a view: not a drag or a press under way.
-export const saved = (view: View): TableState => ({ sort: view.sort ?? null, widths: view.widths, filter: view.filter ?? 'all' })
+export const saved = (view: View): TableState => ({ sort: view.sort ?? null, widths: view.widths, filter: view.filter ?? 'all', cursor: view.cursor ?? null })
 
 // A post's data is the Client's own, but crosses as `unknown`: only a whole TableState is kept.
 // What the Client posts when `q` is pressed.
@@ -38,6 +38,7 @@ export const isState = (data: unknown): data is TableState => {
     typeof d === 'object' && d !== null &&
     Array.isArray(d.widths) && d.widths.every(w => Number.isInteger(w) && w > 0) &&
     (FILTERS as readonly string[]).includes(d.filter) &&
+    (d.cursor === undefined || d.cursor === null || typeof d.cursor === 'string') &&
     (d.sort === null || (typeof d.sort === 'object' && Number.isInteger(d.sort.col) && (d.sort.dir === 'asc' || d.sort.dir === 'desc')))
   )
 }
@@ -162,11 +163,25 @@ export const point = (view: View, e: ClientPointerEvent, laid: readonly number[]
   return view
 }
 
-// The keys `a` `r` `f` choose the filter, `left` and `right` move to the tab before or after (the ends stay).
-export const key = (view: View, k: string): View => {
-  const at = FILTERS.indexOf(view.filter ?? 'all')
-  const filter = k === 'left' ? FILTERS[Math.max(0, at - 1)] : k === 'right' ? FILTERS[Math.min(FILTERS.length - 1, at + 1)] : FILTERS.find(f => f[0] === k)
-  return filter && filter !== (view.filter ?? 'all') ? { ...view, filter } : view
+// What a key does to the filter and the cursor: `a` `r` `f` choose the filter, `left` `right` `h` `l` the tab before or
+// after (the ends stay), `up` `down` `k` `j` the row before or after in `ids` (the shown rows' ids, in order); a new
+// filter drops the cursor. Anything else, and a move that changes nothing, returns the same state.
+export const step = <S extends { filter?: Filter; cursor?: string | undefined }>(state: S, k: string, ids: readonly string[]): S => {
+  const at = FILTERS.indexOf(state.filter ?? 'all')
+  const tab = k === 'left' || k === 'h' ? FILTERS[Math.max(0, at - 1)] : k === 'right' || k === 'l' ? FILTERS[Math.min(FILTERS.length - 1, at + 1)] : FILTERS.find(f => f[0] === k)
+  if (tab) return tab === (state.filter ?? 'all') ? state : { ...state, filter: tab, cursor: undefined }
+  const dir = k === 'down' || k === 'j' ? 1 : k === 'up' || k === 'k' ? -1 : 0
+  if (!dir || !ids.length) return state
+  const now = state.cursor === undefined ? -1 : ids.indexOf(state.cursor)
+  const to = now < 0 ? (dir > 0 ? 0 : ids.length - 1) : Math.min(ids.length - 1, Math.max(0, now + dir))
+  return ids[to] === state.cursor ? state : { ...state, cursor: ids[to] }
+}
+
+// The first row shown of `rows` with room for `room`: the newest unsorted, the first ones sorted, moved to keep the cursor in.
+export const first = (rows: readonly TableRow[], room: number, sorted: boolean, cursor: string | undefined) => {
+  const start = sorted ? 0 : rows.length - room
+  const at = rows.findIndex(r => r.id === cursor)
+  return at < 0 ? start : at < start ? at : at >= start + room ? at - room + 1 : start
 }
 
 // How many rows fit in `lines` lines: the tabs, the top rule, the header, a rule, the rows with a rule between each,

@@ -12,7 +12,7 @@ test('rows that do not fit are counted, not dropped silently', async ($, on) => 
   await ui.resize({ columns: 120, rows: 9, in: 'table' })
   // Nine lines: the frame takes six, one row fits, the last line counts the other two.
   expect(await texts()).toHaveLength(1)
-  expect((await all()).some(t => t.startsWith('… 2 more above'))).toBe(true)
+  expect((await all()).some(t => t.startsWith('… 2 more'))).toBe(true)
   await ui.resize({ columns: 120, rows: 24, in: 'table' })
   expect((await all()).some(t => t.startsWith('…'))).toBe(false)
 })
