@@ -124,7 +124,7 @@ export const register: Register = (on, options) => {
   })
 
   on('command.run', { command: 'divramod-subagent-context' }, async $ => {
-    await $.ui.open({ id: PANE, title: 'Subagents: context', rows: wanted((await read($, rows)).length) })
+    await $.ui.open({ id: PANE, title: 'Subagents: context', rows: wanted((await read($, rows)).length), focus: true })
     return { text: 'Subagents pane opened.' }
   })
 

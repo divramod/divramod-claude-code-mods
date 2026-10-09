@@ -18,7 +18,7 @@ See the [repository README](../../README.md) for the requirements.
 
 - A `subagents` button sits above the prompt: click it to open the pane, click again to close it. Its hotkey `s`
   works once that band has the keyboard (`ctrl+x tab` or a click on it).
-- `/divramod-subagent-context` opens the pane too.
+- `/divramod-subagent-context` opens the pane too. Opened by the command or the button, the pane asks for the keyboard at once (it is granted while your prompt is empty); the pane that opens at the start of a session does not take it.
 - A line under the prompt keeps the state at a glance: `subagents: 2 running · 3 finished · peak 36% ⚠` (`⚠` when a
   row is red).
 

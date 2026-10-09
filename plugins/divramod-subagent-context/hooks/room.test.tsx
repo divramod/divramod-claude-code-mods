@@ -1,4 +1,4 @@
-import { expect, test } from 'claude-code/testing'
+import { expect, mock, test } from 'claude-code/testing'
 
 import { limits } from './table'
 import { summary, wanted } from './register'
@@ -71,4 +71,22 @@ test('a button above the prompt opens the pane, and closes it when it is open', 
   up = true
   await band.press({ key: 'subagents' })
   expect(calls).toEqual(['open 9 true', 'close subagent-context'])
+})
+
+test('the command opens the pane focused, the start of a session does not take the keyboard', async ($, on) => {
+  const asked: (true | undefined)[] = []
+  on('ui.open', (_$, e) => {
+    asked.push(e.focus)
+    return { value: undefined as never }
+  })
+  mock.env(on, { HOME: '/h' })
+  on('session.start', (_$, e) => ({ cwd: e.cwd }))
+  on('session.usage', () => ({ value: { context: { window: 1_000_000 } } as never }))
+  on('command.register', () => ({ value: undefined as never }))
+  on('session.id', () => ({ value: 'S1' }))
+  on('fs.list', () => ({ value: [] }))
+  await mounted($, on)
+  await $.session.start({ cwd: '/w' } as never)
+  await $.command.run({ command: 'divramod-subagent-context' } as never)
+  expect(asked).toEqual([undefined, true])
 })
