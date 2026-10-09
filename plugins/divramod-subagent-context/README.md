@@ -45,7 +45,7 @@ Sort, widths and filter stay while the pane redraws or is closed and reopened.
 
 ## Options
 
-Set them when installing, or later in `/plugin` under the mod's configuration.
+Set them when installing, or later in `/plugin` under the mod's configuration. Installing prints "3 userConfig options not yet set": the defaults below apply until you set them.
 
 | Option | Default | Meaning |
 |---|---|---|
