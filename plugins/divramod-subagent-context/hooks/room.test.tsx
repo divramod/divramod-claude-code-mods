@@ -40,6 +40,7 @@ test("the pane's top right shows the version of plugin.json", async ($, on) => {
   })
   const { ui } = await mounted($, on)
   expect(await ui.find({ type: 'Text', text: 'v9.8.7' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: 'divramod subagents context' })).toBeDefined()
 })
 
 test('a button above the prompt opens the pane, and closes it when it is open', async ($, on) => {

@@ -179,7 +179,8 @@ export const register: Register = (on, options) => {
     const body = e.props.scroll?.bodyRows
     return (
       <Box flexDirection="column" {...(body ? { height: body } : {})}>
-        <Box justifyContent="flex-end">
+        <Box justifyContent="space-between">
+          <Text bold>divramod subagents context</Text>
           <Text dimColor>{version ? `v${version}` : ''}</Text>
         </Box>
         {Client ? (
