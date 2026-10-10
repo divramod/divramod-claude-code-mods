@@ -5,12 +5,15 @@ import type { JobRow, SessionRow, SubagentRow, TableState, Tab } from '../types'
 import { LIMIT, type File, idOf, metaOf, rowOf } from './backfill'
 import { adopt, fill, mark, record } from './rows'
 import { DAYS, parse, serialize } from './store'
-import { agentsGrid, asTable, lines as gridLines, parse as parseSession, plansGrid, planOf } from './sessions'
+import { agentsGrid, asTable, parse as parseSession, plansGrid, planOf } from './sessions'
 import { jobsGrid, merge, stepType } from './jobs'
-import { TABS, bodyOf, count } from './tabs'
-import { FILTERS, type Filter, type TableProps, type TableRow, isClose, isState, order, stepOf, tabOf, shown, step } from './grid'
-import { ALIGNS, type Limits, WIDTHS, cells, color, foot, head, heads, limits, line, running, sums, values } from './table'
+import { bodyOf } from './tabs'
+import { type Filter, isClose, isState, order, stepOf, tabOf, shown, step } from './grid'
+import { type Limits, WIDTHS, limits, tableProps, tableRows } from './table'
+import { TITLE, appended, idle, logLine, unfocused, versionIn, wanted } from './keyboard'
+import { type PaneData, paneView } from './pane-view'
 
+// The pane's id, a literal here so the scan names the hooks' matchers.
 const PANE = 'subagent-context'
 const rows = atom({ plugin: 'divramod-subagent-context', key: 'rows' } as const, [] as SubagentRow[])
 // The table's sort, widths and filter, so a redraw or a reopened pane shows them as they were (view-state rule).
@@ -18,11 +21,7 @@ const view = atom({ plugin: 'divramod-subagent-context', key: 'view' } as const,
 // Bumped when a pane-level key changes the filter: the table is keyed by it, so it starts again from the kept view.
 const epoch = atom({ plugin: 'divramod-subagent-context', key: 'epoch' } as const, 0)
 
-// The pane's own keys `a` `r` `f` `h` `l` `j` `k`, like `q`: they work while the pane holds the keyboard, without a click
-// into the table. The table's rows as it draws them, so a key moves over what is shown.
-const tableRows = (list: readonly SubagentRow[], l: Limits): TableRow[] =>
-  list.map(row => ({ id: row.id, cells: cells(row, l), values: values(row, l), color: color(row, l) ?? null, running: running(row) }))
-
+// The pane's own keys `h` `l` `j` `k`, like `q`: they work while the pane holds the keyboard, without a click into the table.
 async function press($: EngineInterface, l: Limits, key: string) {
   const kept = (await read($, view)) ?? { sort: null, widths: WIDTHS, filter: 'all' as Filter, cursor: null }
   const state = { ...kept, cursor: kept.cursor ?? undefined }
@@ -41,10 +40,8 @@ async function pressSessions($: EngineInterface, key: string, which: 'plans' | '
   const state = { sort: kept?.sort ?? null, widths: kept?.widths ?? asTable(grid, '', null, grid.ids, 0).widths, filter: 'all' as Filter, cursor: kept?.cursor ?? undefined }
   const next = step(state, key, order(rows, state.sort ?? undefined).map(r => r.id))
   if (next.cursor === state.cursor) return
-  const saved_ = { sort: state.sort, widths: state.widths, filter: 'all' as Filter, cursor: next.cursor ?? null }
-  if (which === 'plans') await update($, plansView, () => saved_)
-  else if (which === 'agents') await update($, agentsView, () => saved_)
-  else await update($, jobsView, () => saved_)
+  const kept_ = () => ({ sort: state.sort, widths: state.widths, filter: 'all' as Filter, cursor: next.cursor ?? null })
+  await (which === 'plans' ? update($, plansView, kept_) : which === 'agents' ? update($, agentsView, kept_) : update($, jobsView, kept_))
   await update($, epoch, n => n + 1)
 }
 // `h` `l` on the jobs tab: the type before or after; the cursor starts again.
@@ -128,20 +125,57 @@ async function seen($: EngineInterface, known: Known, l: Limits, e: TurnStepInpu
   await keep($, await update($, rows, list => record(list, step)))
 }
 
-// The body rows the pane asks for: the tabs, the header, one per subagent and the footer, between 9 and 20. A pane
-// opened without `rows` is a third of the screen and showed one row of five (the user, 2026-10-09).
-export const wanted = (subagents: number) => Math.min(20, Math.max(9, subagents + 4))
-
-// Asks an open pane for the room its rows need; a pane the person closed stays closed.
+// Asks an open pane for the room its rows need, never the keyboard; a closed pane stays closed (D6: it never opens by itself).
 async function room($: EngineInterface, n: number) {
   const up = (await $.ui.panes()).some(p => p.id === PANE)
-  if (up) await $.ui.open({ id: PANE, title: 'divramod subagents context', rows: wanted(n) })
+  if (up) await $.ui.open({ id: PANE, title: TITLE, rows: wanted(n) })
+}
+
+// The person's own opens (the typed command, the button), logged: the only ones whose `focus` the `ui.open` hook lets through.
+let asking = 0
+async function asked($: EngineInterface, by: 'command' | 'button') {
+  const n = (await read($, rows)).length
+  await logFocus($, 'ui.open', by, true, 'asked')
+  asking++
+  await $.ui.open({ id: PANE, title: TITLE, rows: wanted(n), focus: true }).finally(() => asking--)
+}
+
+// When the module last saw a key in the pane, and since when the pane holds the keyboard (0: it does not).
+let lastKey = 0
+let focusedAt = 0
+
+// Appends a line to the focus log (`<config>/divramod-subagent-context/focus.log`, the last 200): the proof of who took
+// the keyboard, for the next incident. Writes run one after the other; a failed one is dropped.
+let logging = Promise.resolve()
+async function logFocus($: EngineInterface, what: string, origin: string, granted: boolean, detail = '') {
+  logging = logging.then(async () => {
+    const [at, path] = [await $.clock.now(), `${await configDir($)}/divramod-subagent-context/focus.log`]
+    await $.fs.write(path, appended(String(await $.fs.read(path).catch(() => '')), logLine(at, what, origin, granted, detail)))
+  }).catch(() => {})
+  await logging
+}
+
+// The pane's focus as a drawing or the timer saw it: a change is logged, a new hold starts the idle clock.
+async function focusSeen($: EngineInterface, focused: boolean) {
+  if (focused === focusedAt > 0) return
+  focusedAt = focused ? await $.clock.now() : 0
+  await logFocus($, 'pane', focused ? 'holds the keyboard' : 'gave the keyboard back', true)
+}
+
+// Focused and no key seen for a minute, the pane gives the keyboard back: closed and opened again without `focus`.
+async function release($: EngineInterface) {
+  const pane = (await $.ui.panes()).find(p => p.id === PANE)
+  await focusSeen($, pane?.isFocused ?? false)
+  if (!idle(await $.clock.now(), focusedAt, lastKey)) return
+  await logFocus($, 'idle', 'release', true, 'closed and reopened without focus')
+  focusedAt = 0
+  await $.ui.close({ id: PANE })
+  await $.ui.open({ id: PANE, title: TITLE, rows: wanted((await read($, rows)).length) })
 }
 
 // The version in the plugin's own plugin.json, shown at the pane's top right; empty when it cannot be read.
 async function versionOf($: EngineInterface) {
-  const text = await $.fs.read(`${$.plugin.root}/.claude-plugin/plugin.json`).catch(() => '')
-  return String((() => { try { return JSON.parse(String(text)).version ?? '' } catch { return '' } })())
+  return versionIn(String(await $.fs.read(`${$.plugin.root}/.claude-plugin/plugin.json`).catch(() => '')))
 }
 
 // Where the rows are kept between sessions, and the last time they were written.
@@ -199,10 +233,9 @@ async function earlier($: EngineInterface) {
   // Rows an earlier session left, first: a live row or a transcript of this session wins over them.
   const left = parse(String(await $.fs.read(await storeFile($)).catch(() => '')), await $.clock.now())
   if (left.length) await update($, rows, list => adopt(list, left))
-  const config = (await $.env.get('CLAUDE_CONFIG_DIR')) || `${await $.env.get('HOME')}/.claude`
   const agents = new Map((await $.agent.list()).map(a => [a.id, a]))
   const found: SubagentRow[] = []
-  for (const f of await transcripts($, config, await $.session.id())) {
+  for (const f of await transcripts($, await configDir($), await $.session.id())) {
     const path = `${f.dir}/agent-${f.id}`
     const meta = metaOf(await $.fs.read(`${path}.meta.json`).catch(() => undefined))
     const text = f.size > LIMIT ? undefined : await $.fs.read(`${path}.jsonl`).catch(() => null)
@@ -221,11 +254,11 @@ export const register: Register = (on, options) => {
     l = limits(options, (await $.session.usage()).context.window)
     // A module older than 0.1.7 pinned a summary line under the prompt; clearing it is harmless when none is set.
     void $.ui.status(undefined)
-    void $.ui.open({ id: PANE, title: 'divramod subagents context', rows: wanted(0) })
+    // The pane never opens by itself (D6): not here, not at a reload (which runs this again), not on a subagent's start.
     await update($, jobs, () => [])
     void earlier($).then(() => purge($)).catch(() => {})
     void refresh($)
-    void $.clock.every(10_000, () => refresh($))
+    void $.clock.every(10_000, () => void refresh($).then(() => release($)).catch(() => {}))
     return started
   })
 
@@ -265,7 +298,7 @@ export const register: Register = (on, options) => {
   })
 
   on('command.run', { command: 'divramod-subagent-context' }, async $ => {
-    await $.ui.open({ id: PANE, title: 'divramod subagents context', rows: wanted((await read($, rows)).length), focus: true })
+    await asked($, 'command')
     return { text: 'Subagents pane opened.' }
   })
 
@@ -276,7 +309,7 @@ export const register: Register = (on, options) => {
     const toggle = async () => {
       const up = (await $.ui.panes()).some(p => p.id === PANE)
       if (up) await $.ui.close({ id: PANE })
-      else await $.ui.open({ id: PANE, title: 'divramod subagents context', rows: wanted((await read($, rows)).length), focus: true })
+      else await asked($, 'button')
     }
     return (
       <Box>
@@ -288,15 +321,16 @@ export const register: Register = (on, options) => {
   on('ui.message', async ($, e, next) => {
     const result = await next(e)
     if (e.requestId !== PANE) return result
+    lastKey = await $.clock.now()
     if (isClose(e.data)) await $.ui.close({ id: PANE })
     else if (tabOf(e.data)) await show($, tabOf(e.data)!)
     else if (stepOf(e.data)) await stepJobs($, stepOf(e.data)!)
     else if (isState(e.data)) {
-      const state = e.data as TableState
-      if (e.element === 'table') await update($, view, () => state)
-      else if (e.element === 'plans-table') await update($, plansView, () => state)
-      else if (e.element === 'agents-table') await update($, agentsView, () => state)
-      else if (e.element === 'jobs-table') await update($, jobsView, () => state)
+      const state = () => e.data as TableState
+      if (e.element === 'table') await update($, view, state)
+      else if (e.element === 'plans-table') await update($, plansView, state)
+      else if (e.element === 'agents-table') await update($, agentsView, state)
+      else if (e.element === 'jobs-table') await update($, jobsView, state)
     }
     return result
   })
@@ -304,85 +338,42 @@ export const register: Register = (on, options) => {
   // The table is a `Client` where the surface draws one (terminal, desktop); elsewhere its rows as plain lines.
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const el = $.ui.resolve(e)
-    const { Box, Text, Button } = el
     // VS Code's table names a Client it does not draw yet: the surface decides.
     const Client = 'Client' in el && (e.surface === 'terminal' || e.surface === 'desktop') ? el.Client : undefined
     void purge($)
+    await focusSeen($, e.props.isFocused).catch(() => {})
     const list = await read($, rows)
-    const table: TableProps = {
-      heads: heads(l),
-      widths: WIDTHS,
-      aligns: ALIGNS,
-      rows: tableRows(list, l),
-      sums: Object.fromEntries(FILTERS.map(f => [f, sums(list.filter(r => f === 'all' || running(r) === (f === 'running')), l)])) as TableProps['sums'],
-      view: await read($, view),
-      epoch: await read($, epoch),
-    }
-    const version = await versionOf($)
     const current = await read($, tab)
     const found = await read($, sessions)
     const tabJobs = await read($, jobs)
     const now = current === 'subagents' ? 0 : await $.clock.now()
-    const body_ = current === 'subagents' ? undefined : bodyOf(current, found, await read($, jobs), await read($, jobType), { plans: await read($, plansView), agents: await read($, agentsView), jobs: await read($, jobsView) }, await read($, epoch), now)
-    const room = Math.max(1, (e.viewport?.rows ?? 24) - 5)
+    const other = current === 'subagents' ? undefined : bodyOf(current, found, tabJobs, await read($, jobType), { plans: await read($, plansView), agents: await read($, agentsView), jobs: await read($, jobsView) }, await read($, epoch), now)
+    const table = tableProps(list, l, await read($, view), await read($, epoch))
+    const client = !Client ? undefined : other ? <Client key={`${current}-table`} module="./table-view.tsx" props={other.table} flexGrow={1} /> : <Client key="table" module="./table-view.tsx" props={table} flexGrow={1} />
     // The body is as tall as the pane the surface gave it, so the table grows and shrinks with the window.
-    const body = e.props.scroll?.bodyRows
-    return (
-      <Box flexDirection="column" {...(body ? { height: body } : {})}>
-        {/* The surface draws no pane title, so the title is the body's first line: centered, the version at the right (a blank of its width at the left keeps it centered). */}
-        <Box>
-          <Text>{' '.repeat(version ? version.length + 1 : 0)}</Text>
-          <Box flexGrow={1} justifyContent="center">
-            <Text bold>divramod subagents context</Text>
-          </Box>
-          <Text dimColor>{version ? `v${version}` : ''}</Text>
-        </Box>
-        <Box gap={2}>
-          {TABS.map(([t, key]) => {
-            const label = `${t} ${count(t, list.length, found, tabJobs)}`
-            return t === current ? <Text key={t} bold inverse>{` ${key}: ${label} `}</Text> : <Button key={t} label={label} hotkey={key} plain onPress={() => show($, t)} />
-          })}
-        </Box>
-        {current === 'subagents' ? (
-          <>
-            {Client ? (
-              <Client key="table" module="./table-view.tsx" props={table} flexGrow={1} />
-            ) : (
-              <Box flexDirection="column">
-                <Text bold>{head(l)}</Text>
-                {list.length === 0 && <Text dimColor>No subagents yet.</Text>}
-                {list.slice(-room).map(row => <Text color={color(row, l)}>{line(row, l)}</Text>)}
-              </Box>
-            )}
-            <Text dimColor>{`${foot(l)} · live`}</Text>
-            {/* The pane's own keys: they work while the pane holds the keyboard, without a click into the table. */}
-            <Box gap={1}>
-              {([['h', 'prev'], ['l', 'next'], ['j', 'down'], ['k', 'up']] as const).map(([k, label]) => <Button key={label} label={label} hotkey={k} plain onPress={() => press($, l, k)} />)}
-              <Text dimColor>·</Text>
-              <Button label="close" hotkey="q" plain onPress={() => $.ui.close({ id: PANE })} />
-            </Box>
-          </>
-        ) : body_ && (
-          <>
-            {Client ? (
-              <Client key={`${current}-table`} module="./table-view.tsx" props={body_.table} flexGrow={1} />
-            ) : (
-              <Box flexDirection="column" flexGrow={1}>
-                {gridLines(body_.grid, body_.empty, e.props.bodyColumns ?? e.viewport?.columns ?? 0, (body ?? 24) - 10).map((t, i) => <Text key={String(i)} dimColor={!/^│/.test(t)}>{t}</Text>)}
-              </Box>
-            )}
-            <Text dimColor>{body_.foot}</Text>
-            <Box gap={1}>
-              {current === 'jobs' && <Button label="prev type" hotkey="h" plain onPress={() => stepJobs($, 'prev')} />}
-              {current === 'jobs' && <Button label="next type" hotkey="l" plain onPress={() => stepJobs($, 'next')} />}
-              <Button label="down" hotkey="j" plain onPress={() => pressSessions($, 'j', current)} />
-              <Button label="up" hotkey="k" plain onPress={() => pressSessions($, 'k', current)} />
-              <Text dimColor>·</Text>
-              <Button label="close" hotkey="q" plain onPress={() => $.ui.close({ id: PANE })} />
-            </Box>
-          </>
-        )}
-      </Box>
-    )
+    const data: PaneData = { focused: e.props.isFocused, version: await versionOf($), current, found, jobs: tabJobs, list, l, table: client, other, height: e.props.scroll?.bodyRows, room: Math.max(1, (e.viewport?.rows ?? 24) - 5), columns: e.props.bodyColumns ?? e.viewport?.columns ?? 0 }
+    return paneView(el, data, { show: t => show($, t), press: k => press($, l, k), pressSessions: k => pressSessions($, k, current as Exclude<Tab, 'subagents'>), stepJobs: d => stepJobs($, d), close: () => $.ui.close({ id: PANE }) })
+  })
+
+  // Only the typed command and the button ask for the keyboard: any other open of the pane loses `focus` (D3).
+  on('ui.open', { id: PANE }, async ($, e, next) => {
+    if (!e.focus) return next(e)
+    if (asking > 0) return next(e)
+    await logFocus($, 'ui.open', next.origin.plugin, false, 'focus stripped')
+    return next(unfocused(e))
+  })
+
+  // Every move of the focus ring in the pane, logged; only the person's lands (a plugin's `$.ui.focus` or `autoFocus` is refused).
+  on('ui.focus', { requestId: PANE }, async ($, e, next) => {
+    const person = e.origin.kind === 'person'
+    if (person) lastKey = await $.clock.now()
+    await logFocus($, 'ui.focus', e.origin.kind === 'plugin' ? `plugin:${e.origin.name}` : 'person', person, e.element ?? '')
+    return person ? next(e) : { deny: 'divramod-subagent-context: only the person moves the focus in its pane' }
+  })
+
+  // A press in the pane is a key the module sees: it holds the idle release off.
+  on('ui.press', { requestId: PANE }, async ($, e, next) => {
+    lastKey = await $.clock.now()
+    return next(e)
   })
 }

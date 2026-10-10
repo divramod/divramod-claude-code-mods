@@ -1,6 +1,6 @@
 import { expect, mock, test } from 'claude-code/testing'
 
-import { wanted } from './register'
+import { wanted } from './keyboard'
 import { PANE, mounted, steps } from './testkit'
 
 test('the pane asks for a row per subagent, between 9 and 20', () => {
@@ -64,7 +64,7 @@ test('a button above the prompt opens the pane, and closes it when it is open', 
   expect(calls).toEqual(['open 9 true', 'close subagent-context'])
 })
 
-test('the command opens the pane focused, the start of a session does not take the keyboard', async ($, on) => {
+test('the command opens the pane focused, the start of a session opens nothing', async ($, on) => {
   const asked: (true | undefined)[] = []
   on('ui.open', (_$, e) => {
     asked.push(e.focus)
@@ -79,7 +79,7 @@ test('the command opens the pane focused, the start of a session does not take t
   await mounted($, on)
   await $.session.start({ cwd: '/w' } as never)
   await $.command.run({ command: 'divramod-subagent-context' } as never)
-  expect(asked).toEqual([undefined, true])
+  expect(asked).toEqual([true])
 })
 
 // The test engine lays no heights out, so this checks what the engine is asked for: a body as tall as the pane's.

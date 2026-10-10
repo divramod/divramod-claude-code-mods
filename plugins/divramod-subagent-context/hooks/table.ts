@@ -1,6 +1,7 @@
 import type { PluginOptions } from 'claude-code'
 
-import type { SubagentRow } from '../types'
+import type { SubagentRow, TableState } from '../types'
+import { FILTERS, type TableProps, type TableRow } from './grid'
 
 // The window a share is counted against and the two thresholds, from the mod's options.
 export type Limits = { window: number; warn: number; alert: number }
@@ -77,3 +78,18 @@ export const head = (l: Limits) => join(heads(l))
 export const line = (row: SubagentRow, l: Limits) => join(cells(row, l))
 
 export const foot = (l: Limits) => `warn ${Math.round(l.warn * 100)}% · stop ${Math.round(l.alert * 100)}% of ${label(l.window)}`
+
+// The table's rows as it draws them, so a pane-level key moves over what is shown.
+export const tableRows = (list: readonly SubagentRow[], l: Limits): TableRow[] =>
+  list.map(row => ({ id: row.id, cells: cells(row, l), values: values(row, l), color: color(row, l) ?? null, running: running(row) }))
+
+// The subagents table's props for its `Client`: the rows, a sum row per filter, and the kept view.
+export const tableProps = (list: readonly SubagentRow[], l: Limits, view: TableState | null, epoch: number): TableProps => ({
+  heads: heads(l),
+  widths: WIDTHS,
+  aligns: ALIGNS,
+  rows: tableRows(list, l),
+  sums: Object.fromEntries(FILTERS.map(f => [f, sums(list.filter(r => f === 'all' || running(r) === (f === 'running')), l)])) as TableProps['sums'],
+  view,
+  epoch,
+})
